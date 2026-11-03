@@ -30,24 +30,24 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// All records and quotes in this build are fictional. No network or payment API is called.
-private val Ink = Color(0xFF0B1017)
-private val Panel = Color(0xFF151D28)
-private val Lime = Color(0xFFD5F58A)
-private val Muted = Color(0xFF9AAABD)
-private val White = Color(0xFFF3F6FA)
-private val Amber = Color(0xFFFFD69A)
+// Original visual demo remains available to Android Studio Preview only.
+internal val Ink = Color(0xFF0B1017)
+internal val Panel = Color(0xFF151D28)
+internal val Lime = Color(0xFFD5F58A)
+internal val Muted = Color(0xFF9AAABD)
+internal val White = Color(0xFFF3F6FA)
+internal val Amber = Color(0xFFFFD69A)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { AccountApp() }
+        setContent { LiveAccountApp() }
     }
 }
 
 @Composable
-private fun AccountTheme(content: @Composable () -> Unit) {
+internal fun AccountTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(primary = Lime, onPrimary = Ink, background = Ink,
             surface = Panel, onSurface = White, onBackground = White,
@@ -311,7 +311,7 @@ private fun SignIn(onSignIn: () -> Unit) {
     }
 }
 
-@Composable private fun Brand() {
+@Composable internal fun Brand() {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Surface(color = Lime, shape = RoundedCornerShape(12.dp)) {
             Text("am", Modifier.padding(horizontal = 10.dp, vertical = 7.dp), color = Ink, fontWeight = FontWeight.Black, fontSize = 22.sp)
@@ -321,13 +321,13 @@ private fun SignIn(onSignIn: () -> Unit) {
     }
 }
 @Composable private fun DemoLabel() { Text("SCREEN PREVIEW  /  DEMO DATA", color = Amber, fontSize = 10.sp, letterSpacing = 1.5.sp) }
-@Composable private fun Heading(title: String, subtitle: String) {
+@Composable internal fun Heading(title: String, subtitle: String) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, fontSize = 30.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold)
         Text(subtitle, color = Muted, fontSize = 14.sp)
     }
 }
-@Composable private fun BoxCard(content: @Composable ColumnScope.() -> Unit) {
+@Composable internal fun BoxCard(content: @Composable ColumnScope.() -> Unit) {
     Surface(color = Panel, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
     }
@@ -353,28 +353,28 @@ private fun SignIn(onSignIn: () -> Unit) {
         }
     }
 }
-@Composable private fun Label(text: String) { Text(text, color = Muted, fontSize = 10.sp, letterSpacing = 1.4.sp) }
-@Composable private fun Badge(text: String) {
+@Composable internal fun Label(text: String) { Text(text, color = Muted, fontSize = 10.sp, letterSpacing = 1.4.sp) }
+@Composable internal fun Badge(text: String) {
     Surface(color = Lime.copy(alpha = 0.10f), shape = RoundedCornerShape(8.dp)) {
         Text(text, Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = Lime, fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }
-@Composable private fun Detail(label: String, value: String, accent: Boolean = false) {
+@Composable internal fun Detail(label: String, value: String, accent: Boolean = false) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(label, color = Muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
         Text(value, color = if (accent) Lime else White, fontSize = 13.sp, fontWeight = FontWeight.Medium,
             modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.End)
     }
 }
-@Composable private fun Primary(text: String, onClick: () -> Unit) {
+@Composable internal fun Primary(text: String, onClick: () -> Unit) {
     Button(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp), shape = RoundedCornerShape(14.dp)) {
         Text(text, fontWeight = FontWeight.Bold, fontSize = 15.sp)
     }
 }
-@Composable private fun Secondary(text: String, onClick: () -> Unit) {
+@Composable internal fun Secondary(text: String, onClick: () -> Unit) {
     OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(14.dp)) { Text(text) }
 }
-@Composable private fun Hint(text: String) { Text(text, color = Muted, fontSize = 12.sp, lineHeight = 18.sp) }
+@Composable internal fun Hint(text: String) { Text(text, color = Muted, fontSize = 12.sp, lineHeight = 18.sp) }
 @Composable private fun SectionTitle(title: String, action: String, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
@@ -396,7 +396,7 @@ private fun SignIn(onSignIn: () -> Unit) {
     }
 }
 @OptIn(ExperimentalLayoutApi::class)
-@Composable private fun Choices(items: List<String>, selected: String, onSelect: (String) -> Unit) {
+@Composable internal fun Choices(items: List<String>, selected: String, onSelect: (String) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items.forEach { item -> FilterChip(selected = item == selected, onClick = { onSelect(item) }, label = { Text(item) },
             colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Lime, selectedLabelColor = Ink)) }
