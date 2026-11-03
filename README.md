@@ -18,6 +18,11 @@ Android customer account-management project for the owner's customers.
 - Signed APK releases and in-app updates following Extreme Hub's release process.
 - Publish source code in the public AM-App GitHub repository, as requested by the owner.
 - Keep AM's implementation independent. Hub is a reference only: do not modify its app, backend functions, enrollment, settings, or deployment for this project.
+- Show services as package → bouquets → categories within each bouquet. Adding/removing permitted bouquets changes channel access.
+
+## Reseller panel and worker reference
+
+Use the owner's `derangedchief-crypto/Reseller-website` as the reference for package, bouquet, renewal, and connection-management functions. AM owns its copies/implementations; the reseller site and existing workers remain separate. See [`docs/reseller-worker-reference.md`](docs/reseller-worker-reference.md) for traced endpoints, known schema, and remaining deployment/category-mapping inputs. The current live APK still shows flat provider categories until this richer backend is connected.
 
 ## Billing reference for future integration
 
