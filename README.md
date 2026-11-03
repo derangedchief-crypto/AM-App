@@ -42,4 +42,46 @@ Current checkout requires an approved branded package and an expired service. A 
 
 ## Status
 
-Requirements and integration research only. No working Android app or backend changes have been delivered yet.
+Interactive native Android screen preview built with Kotlin and Jetpack Compose. All accounts, invoices, balances, and service details are explicitly labeled demo data. No backend is connected, no credentials are sent or saved, and no payment or service modification is performed.
+
+### Screens
+
+- Sign-in and demo entry
+- Home dashboard with service status, expiry, balance, and recent activity
+- Service details
+- Modify package, simultaneous connections, subscription length, and channel selections
+- Renewal duration selection
+- Review selections, country, and account-credit preference
+- Demo confirmation explaining the connected payment flow
+- Bill history with paid/credit filters and invoice detail
+- Account credit balance and credit activity
+- Account, update, support, and sign-out controls
+
+Service modification quotes are deliberately shown as pending: demo selections do not invent live prices or proration rules. The credit-use switch is a UI proposal; final credit application policy still needs confirmation.
+
+### Build and run
+
+Requires JDK 17 and Android SDK 36. Set `ANDROID_HOME` or create an ignored `local.properties` with `sdk.dir`.
+
+```sh
+./gradlew :app:assembleDebug :app:lintDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Open **AM Account · Demo** and choose **Explore demo account**. The demo uses a separate application ID, `net.extremeiptv.account.demo`. UI choices survive rotation; signing out returns to the sample defaults. Real sign-in, billing, persistent account sessions, downloads, and support integration remain future backend work.
+
+Visual direction: deep navy surfaces, lime accents, large headings, rounded cards, and four bottom-navigation destinations. Source: `app/src/main/kotlin/net/extremeiptv/account/MainActivity.kt`.
+
+### Visual preview
+
+Open [`docs/screens.html`](docs/screens.html) in a browser for a clickable design companion, including all main screens. It uses the same colors and content as the native app but is not an Android emulator.
+
+| Home | Modify service | Bills |
+| --- | --- | --- |
+| ![Home screen design](docs/screenshots/home.png) | ![Service modification design](docs/screenshots/modify.png) | ![Bill history design](docs/screenshots/bills.png) |
+
+### Verification
+
+- Debug APK assembled successfully; Android lint: 0 errors, 5 advisory warnings (SDK/dependency versions and backup configuration).
+- Browser design companion checked at 360px width across 10 screens with no horizontal overflow or JavaScript errors. Verified selections reaching review, demo confirmation, bill filters, and invoice navigation.
+- Native runtime interaction has not been verified: the available emulator cannot start because this environment lacks KVM permissions.
