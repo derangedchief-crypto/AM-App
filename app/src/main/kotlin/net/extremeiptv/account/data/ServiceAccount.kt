@@ -22,9 +22,14 @@ internal data class ServiceAccount(
     val packageName: String?,
     val createdAt: Long?,
     val checkedAtMillis: Long = System.currentTimeMillis(),
+    val providerName: String = "",
+    val supportEmail: String = "",
+    val bouquets: List<String> = emptyList(),
+    val offers: List<RenewalOffer> = emptyList(),
+    val renewalMode: String = "sandbox",
 )
 
-internal enum class FailureKind { INVALID_INPUT, UNAUTHORIZED, RESTRICTED, RATE_LIMITED, UNAVAILABLE, INVALID_RESPONSE }
+internal enum class FailureKind { INVALID_INPUT, UNAUTHORIZED, RESTRICTED, RATE_LIMITED, UNAVAILABLE, INVALID_RESPONSE, CONFLICT }
 
 /** Fixed messages only: raw responses/URLs may contain credentials. */
 internal class AccountFailure(val kind: FailureKind) : Exception(when (kind) {
@@ -34,6 +39,7 @@ internal class AccountFailure(val kind: FailureKind) : Exception(when (kind) {
     FailureKind.RATE_LIMITED -> "Too many requests. Please wait a few minutes before trying again."
     FailureKind.UNAVAILABLE -> "Unable to reach the service provider. Check your connection and try again."
     FailureKind.INVALID_RESPONSE -> "The provider returned incomplete account information. Please try again later."
+    FailureKind.CONFLICT -> "This renewal could not be confirmed. Refresh your account and check any existing order before trying again. Contact your reseller if it needs review."
 })
 
 internal object AccountParser {

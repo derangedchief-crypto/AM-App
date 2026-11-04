@@ -15,7 +15,7 @@ final class Settings
             'allow_connections' => false, 'allow_renewals' => false,
             'display_name' => '', 'support_email' => '', 'currency' => 'CAD',
             'billing_mode' => 'none', 'billing_url' => '',
-            'gateways' => [],
+            'gateways' => [], 'square_mode' => 'sandbox',
         ];
     }
 
@@ -34,7 +34,7 @@ final class Settings
             $out[$field] = trim($value);
         }
         foreach (['customer_policy' => ['all', 'selected'], 'currency' => ['CAD', 'USD'],
-                  'billing_mode' => ['none', 'external', 'integrated', 'both']] as $field => $allowed) {
+                  'billing_mode' => ['none', 'external', 'integrated', 'both'], 'square_mode' => ['sandbox', 'live']] as $field => $allowed) {
             $value = $input[$field] ?? $out[$field];
             if (!is_string($value) || !in_array($value, $allowed, true)) throw new \InvalidArgumentException('Invalid settings option.');
             $out[$field] = $value;
@@ -111,7 +111,7 @@ final class SettingsStore
         $query = $this->db->prepare('SELECT revision, settings_json FROM am_reseller_settings WHERE reseller_id=?');
         $query->execute([$resellerId]);
         $row = $query->fetch(\PDO::FETCH_ASSOC);
-        return $row ? ['revision' => (int)$row['revision'], 'settings' => json_decode($row['settings_json'], true, 32, JSON_THROW_ON_ERROR)]
+        return $row ? ['revision' => (int)$row['revision'], 'settings' => array_replace(Settings::defaults(), json_decode($row['settings_json'], true, 32, JSON_THROW_ON_ERROR))]
             : ['revision' => 0, 'settings' => Settings::defaults()];
     }
 

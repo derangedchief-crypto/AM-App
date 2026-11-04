@@ -45,7 +45,7 @@ Keep the database and `gateway.key` together in private backups. If the key is m
 
 ## Remaining customer integration
 
-The customer API/ownership mapping, customer prices, automatic renewal, credit/proration, and Android checkout handoff are still pending. This release does not grant customers new service permissions, create subscription invoices, or call any service-changing worker endpoint. Square setup tests have their own ledger. The gateway preference checkboxes do not by themselves make customer checkout live.
+Version 0.3.0 connects customer ownership, reseller prices, Android checkout and automatic verified renewal after deploying both server updates. See [connected deployment](connected-renewal-deployment.md). Square setup tests retain their separate ledger and never renew service. Customer production checkout additionally requires opt-in, renewal permission, integrated billing, Square selection, an enabled current-package price and the matching merchant connection. Package changes and proration are outside this renewal-only release.
 
 ## Verification
 

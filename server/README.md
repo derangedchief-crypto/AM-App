@@ -4,7 +4,7 @@
 
 The additive `panel/` module installs at **https://fecxbrfzku.net/am-app/**. There is no navigation entry. It uses the existing reseller login and CSRF implementation, rechecks enabled status with `/panel-user-balance`, and denies staff/impersonated sessions. Settings and audit revisions use a separate SQLite database scoped to the authenticated reseller ID.
 
-**Customer controls still save preferences only.** Square now supports encrypted merchant setup and isolated hosted-checkout tests, using Hub's verification flow. See [`docs/square-setup.md`](../docs/square-setup.md). Customer API access, individual approvals, live package/bouquet data, customer invoices/credits, renewals, and service writes are not connected. Existing Android v0.2.1 does not yet enforce these preferences.
+**0.3.0 connects customer controls and renewal checkout.** It adds bearer sessions, authoritative worker ownership, individual approvals/revocation, package/bouquet data, current-package renewal quotes, Square checkout, order history and idempotent fulfilment. Install the worker add-on and website update before using the connected APK. See [`connected deployment`](../docs/connected-renewal-deployment.md). Earlier read-only APKs do not enforce AM participation.
 
 ### aaPanel install
 
@@ -42,7 +42,7 @@ Use PHP 8.1+ with PDO SQLite, sessions, OpenSSL and cURL. Installer/updater test
 
 The hidden page's **Package renewal prices** section reads the existing signed `/packages` endpoint for the authenticated reseller. Package ID, term, connection count and wholesale credit cost come from that worker; resellers enter only their own CAD/USD customer renewal amount and whether to offer it. Prices are isolated by reseller/package/currency, with revision conflict handling. No bouquet fees are added. Free retail renewals (0.00) still carry the normal wholesale credit debit.
 
-Run the updater to add `am_package_prices`; existing settings and gateway tests remain intact. Package pricing is not yet a live customer checkout or renewal endpoint. Current deployed worker ownership and exactly-once renewal contracts must be verified before those operations are enabled. On the separate worker host, `python3 server/inspect-worker-contract.py --worker /opt/iptv-auth-worker/main.py` provides a read-only, secret-free contract inventory; adjust the path if needed.
+Run the updater to add pricing/customer tables; existing settings and gateway tests remain intact. Customer quotes use server-owned prices and require review after wholesale/term/connection changes. The current worker inventory has been verified; `worker/deploy.py` validates the matching deployed helpers again before adding AM routes.
 
 Pricing tests: `php server/tests/pricing_test.php`. They verify reseller isolation, exact cents, fixed wholesale cost, free bouquets, stale package/price handling, unavailable packages, and disabled quotes.
 
@@ -56,7 +56,7 @@ Target architecture:
 
 AM owns its customer API, session storage, and customer-scoping logic. Worker shared secrets remain on the server. The Android app must not receive a reseller-wide worker secret or the full reseller line listing. Hub and shared worker contracts remain unchanged unless a missing contract is separately agreed. The reseller panel receives the additive hidden AM settings page while preserving existing behavior.
 
-## Current step: identify the hosting layout
+## Historical hosting inventory tools
 
 `inspect-host.py` is a read-only inventory intended for the aaPanel terminal on the reseller website host. It identifies the application by `manage-lines.php` and `includes/functions.php`, then reports document roots, public server names, PHP capability flags, configuration-section presence (not values), and whether an `am-api` directory already exists.
 
@@ -64,4 +64,4 @@ It does not load/execute the site's PHP configuration, access databases or worke
 
 After this inventory, prepare an isolated AM deployment using the verified hosting paths. Confirm its authenticated package/bouquet reads with an authorized test customer before connecting Android. Existing reseller routes/login should receive before/after read-only smoke checks. Do not overwrite an existing `am-api` directory or reuse reseller browser sessions for customer authorization.
 
-This directory currently contains the inventory tool and integration notes, not a deployed/runnable customer API.
+The customer API implementation is included here; local tests do not imply live deployment. Follow the connected deployment guide and run the readiness check on the website host.

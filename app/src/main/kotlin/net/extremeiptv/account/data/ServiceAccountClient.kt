@@ -19,6 +19,11 @@ import kotlin.coroutines.resumeWithException
 internal interface AccountClient {
     suspend fun resolveCode(code: String): ServiceCredentials
     suspend fun readAccount(credentials: ServiceCredentials): ServiceAccount
+    fun clearSession() {}
+    suspend fun orders(): List<RenewalOrder> = emptyList()
+    suspend fun quote(offer: RenewalOffer): RenewalQuote = throw AccountFailure(FailureKind.UNAVAILABLE)
+    suspend fun checkout(quote: RenewalQuote): RenewalOrder = throw AccountFailure(FailureKind.UNAVAILABLE)
+    suspend fun order(id: String): RenewalOrder = throw AccountFailure(FailureKind.UNAVAILABLE)
 }
 
 /** Independent AM implementation of Hub's wire protocol. No Hub SDK or shared app state. */

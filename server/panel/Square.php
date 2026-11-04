@@ -124,6 +124,15 @@ final class Square
         }
         return ['status' => 'paid', 'payment_id' => $pid];
     }
+
+    public function reference(array $c, string $orderId): ?string
+    {
+        $id = self::id($orderId);
+        $o = $this->request($c, '/v2/orders/' . rawurlencode($id))['order'] ?? [];
+        $ref = $o['reference_id'] ?? null;
+        if (($o['id'] ?? '') !== $id || ($o['location_id'] ?? '') !== $c['location_id'] || !is_string($ref) || !preg_match('/^[a-f0-9]{32}$/D', $ref)) return null;
+        return $ref;
+    }
 }
 
 final class SquareStore
@@ -131,7 +140,7 @@ final class SquareStore
     private \PDO $db;
     private string $key;
 
-    public function __construct(private array $config, private Square $api)
+    public function __construct(private array $config, private Square $api, private ?\Closure $onPayment = null)
     {
         if (!is_file($config['database']) || !is_file($config['secret_key'])) throw new \RuntimeException('Install the gateway update first.');
         $this->key = file_get_contents($config['secret_key']);
@@ -185,6 +194,16 @@ final class SquareStore
         if (!$c) throw new \InvalidArgumentException('Square connection not found for this reseller.');
         $c['token'] = $this->unseal($c['token_cipher'], $reseller . ':' . $id . ':token');
         return $c;
+    }
+
+    /** Internal server-only credentials: never serialize this into a customer response. */
+    public function forOrder(string $reseller, string $id): array { return $this->connection($reseller, $id); }
+
+    public function forCheckout(string $reseller, string $mode, string $currency): array
+    {
+        $row = $this->one('SELECT id FROM am_square_connections WHERE reseller_id=? AND mode=? AND currency=? AND webhook_cipher IS NOT NULL ORDER BY created_at DESC,rowid DESC LIMIT 1', [$reseller,$mode,$currency]);
+        if (!$row) throw new \InvalidArgumentException('Square checkout is not configured for this currency and environment.');
+        return $this->connection($reseller, $row['id']);
     }
 
     public function connect(string $reseller, string $mode, string $token, string $location): void
@@ -264,6 +283,7 @@ final class SquareStore
         $this->db->prepare('UPDATE am_square_connections SET webhook_seen=? WHERE id=?')->execute([time(), $id]);
         if (!in_array($event['type'] ?? '', ['payment.created', 'payment.updated'], true)) return;
         $payment = $event['data']['object']['payment'] ?? [];
+        if ($this->onPayment && is_string($payment['order_id'] ?? null)) ($this->onPayment)($c['reseller_id'], $id, $payment['order_id']);
         $o = $this->test($c['reseller_id'], $id);
         if (!$o || !$o['square_order_id'] || ($payment['order_id'] ?? '') !== $o['square_order_id']) return;
         // Notifications trigger a fresh API lookup; their content never proves settlement.

@@ -135,6 +135,45 @@ class AccountViewModelTest {
         store.failClear = false; model.signOut()
         assertNull(store.saved); assertNull(model.state.value.account)
     }
+
+    @Test fun `late checkout cannot resurrect signed out order details`() = runTest(dispatcher) {
+        val result = CompletableDeferred<RenewalOrder>()
+        val offer = RenewalOffer(1,"Monthly",725,"CAD",30,"days",2)
+        val client = object : AccountClient {
+            override suspend fun resolveCode(code: String) = ServiceCredentials("customer","secret")
+            override suspend fun readAccount(credentials: ServiceCredentials) = account()
+            override suspend fun quote(offer: RenewalOffer) = RenewalQuote("a".repeat(32),offer,"live")
+            override suspend fun checkout(quote: RenewalQuote) = withContext(NonCancellable) { result.await() }
+        }
+        val model = AccountViewModel(client,TestLoginStore())
+        model.signIn("","customer","secret",false); advanceUntilIdle()
+        model.requestQuote(offer); advanceUntilIdle(); model.confirmRenewal(); runCurrent()
+        model.signOut()
+        result.complete(RenewalOrder("b".repeat(32),"Monthly",725,"CAD","live","pending",false,1800000000,null))
+        advanceUntilIdle(); assertEquals(LiveAccountState(),model.state.value)
+    }
+
+    @Test fun `uncertain checkout retry keeps the same confirmed quote`() = runTest(dispatcher) {
+        val offer = RenewalOffer(1,"Monthly",725,"CAD",30,"days",2)
+        val ids = mutableListOf<String>()
+        val client = object : AccountClient {
+            override suspend fun resolveCode(code: String) = ServiceCredentials("customer","secret")
+            override suspend fun readAccount(credentials: ServiceCredentials) = account()
+            override suspend fun quote(offer: RenewalOffer) = RenewalQuote("a".repeat(32),offer,"live")
+            override suspend fun checkout(quote: RenewalQuote): RenewalOrder {
+                ids.add(quote.id)
+                if (ids.size==1) throw AccountFailure(FailureKind.UNAVAILABLE)
+                return RenewalOrder("b".repeat(32),"Monthly",725,"CAD","live","pending",false,1800000000,null)
+            }
+        }
+        val model = AccountViewModel(client,TestLoginStore())
+        model.signIn("","customer","secret",false); advanceUntilIdle()
+        model.requestQuote(offer); advanceUntilIdle(); model.confirmRenewal(); advanceUntilIdle()
+        assertNotNull(model.state.value.quote); assertNotNull(model.state.value.error)
+        model.confirmRenewal(); advanceUntilIdle()
+        assertEquals(listOf("a".repeat(32),"a".repeat(32)),ids)
+        assertNull(model.state.value.quote); assertNotNull(model.state.value.selectedOrder)
+    }
 }
 
 private class TestLoginStore(var saved: SavedLogin? = null) : LoginStore {

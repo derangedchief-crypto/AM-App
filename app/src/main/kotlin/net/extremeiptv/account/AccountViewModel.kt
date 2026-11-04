@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -17,6 +19,9 @@ internal data class LiveAccountState(
     val restoring: Boolean = false,
     val canRetrySavedLogin: Boolean = false,
     val remembered: Boolean = false,
+    val orders: List<RenewalOrder> = emptyList(),
+    val quote: RenewalQuote? = null,
+    val selectedOrder: RenewalOrder? = null,
 )
 
 /** Saved login is encrypted; account access still requires fresh provider verification. */
@@ -53,6 +58,7 @@ internal class AccountViewModel(private val client: AccountClient, private val s
     }
 
     private fun authenticate(login: SavedLogin, restoring: Boolean) {
+        client.clearSession()
         credentials = null
         val revision = ++generation
         mutableState.value = LiveAccountState(busy = true, restoring = restoring)
@@ -60,12 +66,14 @@ internal class AccountViewModel(private val client: AccountClient, private val s
             try {
                 val resolved = login.resolve(client)
                 val account = client.readAccount(resolved)
+                val orders = client.orders()
                 if (revision != generation) return@launch
                 // These tiny atomic store operations do not suspend, so sign-out cannot
                 // interleave between the generation check and persisting a late result.
                 val saved = restoring || runCatching { store.save(login) }.isSuccess
                 credentials = resolved
-                mutableState.value = LiveAccountState(account = account, remembered = saved,
+                mutableState.value = LiveAccountState(account = account, remembered = saved, orders = orders,
+                    selectedOrder = orders.firstOrNull { !it.complete },
                     error = if (saved) null else "Signed in, but this device could not save your login. You may need to sign in again after closing the app.")
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
@@ -84,8 +92,13 @@ internal class AccountViewModel(private val client: AccountClient, private val s
         mutableState.value = mutableState.value.copy(busy = true, error = null)
         operation = viewModelScope.launch {
             try {
+                val orders = client.orders()
+                val pending = orders.firstOrNull { !it.complete }
+                val checked = pending?.let { client.order(it.id) }
                 val account = client.readAccount(login)
-                if (revision == generation) mutableState.value = LiveAccountState(account = account, remembered = mutableState.value.remembered)
+                if (revision == generation) mutableState.value = mutableState.value.copy(account = account, busy = false,
+                    stale = false, orders = orders.map { if (it.id == checked?.id) checked else it },
+                    selectedOrder = checked ?: mutableState.value.selectedOrder)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (revision != generation) return@launch
@@ -108,10 +121,69 @@ internal class AccountViewModel(private val client: AccountClient, private val s
             return
         }
         credentials = null
+        client.clearSession()
         mutableState.value = LiveAccountState()
     }
 
-    override fun onCleared() { credentials = null; super.onCleared() }
+    fun requestQuote(offer: RenewalOffer) = renewalOperation {
+        val outstanding = client.orders().firstOrNull { !it.complete }
+        if (outstanding != null) {
+            val order = client.order(outstanding.id)
+            currentCoroutineContext().ensureActive()
+            mutableState.value = mutableState.value.copy(selectedOrder = order, quote = null)
+        } else {
+            val quote = client.quote(offer)
+            currentCoroutineContext().ensureActive()
+            mutableState.value = mutableState.value.copy(quote = quote, selectedOrder = null)
+        }
+    }
+
+    fun dismissQuote() { if (!mutableState.value.busy) mutableState.value = mutableState.value.copy(quote = null) }
+
+    fun confirmRenewal() {
+        val quote = mutableState.value.quote ?: return
+        renewalOperation {
+            val order = client.checkout(quote)
+            currentCoroutineContext().ensureActive()
+            mutableState.value = mutableState.value.copy(selectedOrder = order, quote = null)
+            reloadAfterOrder()
+        }
+    }
+
+    fun checkOrder(id: String) = renewalOperation {
+        val order = client.order(id)
+        currentCoroutineContext().ensureActive()
+        mutableState.value = mutableState.value.copy(selectedOrder = order, quote = null)
+        reloadAfterOrder()
+    }
+
+    private suspend fun reloadAfterOrder() {
+        val orders = client.orders()
+        val account = client.readAccount(credentials ?: throw AccountFailure(FailureKind.UNAUTHORIZED))
+        currentCoroutineContext().ensureActive()
+        mutableState.value = mutableState.value.copy(orders = orders, account = account, stale = false)
+    }
+
+    private fun renewalOperation(action: suspend () -> Unit) {
+        if (mutableState.value.busy || credentials == null) return
+        val revision = generation
+        mutableState.value = mutableState.value.copy(busy = true, error = null)
+        operation = viewModelScope.launch {
+            try { action() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                if (revision != generation) return@launch
+                if (error is AccountFailure && error.kind in setOf(FailureKind.UNAUTHORIZED, FailureKind.RESTRICTED)) {
+                    credentials = null; client.clearSession(); runCatching { store.clear() }
+                    mutableState.value = LiveAccountState(error = safeMessage(error))
+                } else mutableState.value = mutableState.value.copy(error = safeMessage(error))
+            } finally {
+                if (revision == generation) mutableState.value = mutableState.value.copy(busy = false)
+            }
+        }
+    }
+
+    override fun onCleared() { credentials = null; client.clearSession(); super.onCleared() }
 
     private fun safeMessage(error: Exception) =
         (error as? AccountFailure)?.message ?: "Unable to load your account. Please try again."

@@ -28,7 +28,7 @@ Universal Android customer account-management app for participating resellers an
 
 Use the owner's `derangedchief-crypto/Reseller-website` as the reference for package, bouquet, renewal, and connection-management functions. AM owns its copies/implementations; the reseller site and existing workers remain separate. See [`docs/reseller-worker-reference.md`](docs/reseller-worker-reference.md) for traced endpoints, known schema, and remaining deployment inputs. The live APK shows a bouquet setup-pending state until this backend is connected; category mapping is no longer needed.
 
-The hidden reseller management page at `/am-app/` is installed and saving preferences. Square sandbox checkout and signed webhook verification have passed on the user's host. [`server/`](server/README.md) now also contains per-reseller package renewal pricing, showing fixed wholesale credit cost separately from editable customer money prices; that pricing update is pending deployment. See [`docs/square-setup.md`](docs/square-setup.md) for gateway setup. Customer ownership/session APIs and automatic paid renewal remain blocked on verification of the deployed worker's ownership and idempotent-renewal contracts. See [`docs/multi-reseller-integration.md`](docs/multi-reseller-integration.md).
+The hidden reseller management page at `/am-app/` is installed and saving preferences. Square sandbox setup and signed webhooks were verified on the user's host. Version 0.3.0 connects Android to AM's customer API for ownership-checked login, current package/bouquets, reseller renewal prices, Square checkout, renewal status and billing history. **Deploy the worker add-on and website update before installing the connected APK.** See [`docs/connected-renewal-deployment.md`](docs/connected-renewal-deployment.md). Live customer payment/fulfilment still requires host acceptance; local tests use synthetic payments.
 
 ## Billing reference for future integration
 
@@ -54,23 +54,24 @@ Current checkout requires an approved branded package and an expired service. A 
 
 ## Status
 
-Version **0.2.2: AM branding and renewal-only scope**. Matching uppercase AM artwork appears in the adaptive launcher icon and inside the app. Package changes direct customers to their reseller. This test APK remains read-only: renewal checkout is not connected yet. The Android app calls the real service-provider endpoints using its own implementation of the Hub login protocol. It displays only returned account data; the live navigation has no demo-account entry, sample bills, invented package, or assumed credit balance.
+Version **0.3.0: connected customer renewals**. Matching uppercase AM artwork appears in the adaptive launcher icon and inside the app. Package changes direct customers to their reseller. The app uses AM customer APIs and enforces reseller participation; there is no direct-provider fallback for account access. The legacy activation resolver can resolve a Hub code, but its credentials must still pass AM ownership/access checks.
 
-[Download the 0.2.2 test APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.2.2-live-readonly/AM-Account-0.2.2-live-readonly-test.apk). Its signing certificate matches 0.2.1 for an in-place update.
+[Download the 0.3.0 connected APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.3.0-connected-renewals/AM-Account-0.3.0-connected-renewals-test.apk). Install the server update first. Application ID/signing remain compatible with earlier test builds.
 
-Login and account refresh are connected in code. End-to-end verification with a real customer requires an authorized test account; no customer credentials have been used during development. Billing, payment, service modifications, and automatic APK updates are still pending.
+Login, bouquet/package reads, renewal offers, confirmation, Square browser checkout, status recovery and new order history are connected in code. Production mode requires server-verified captured payment before fulfilment; sandbox never renews. Service changes are reseller-only. Downloads/updates open GitHub Releases; silent/automatic APK installation is not implemented. Live device and production-payment acceptance remain deployment checks.
 
 ### Screens
 
 - Activation-code or service-credential sign-in with loading and error states
 - Home dashboard with verified service status, expiry, and connection counts
-- Service details and a bouquet connection-pending section; no category list or category request
+- Real worker package and assigned bouquets; no categories
 - Explicit unavailable states for package/duration fields the provider doesn't supply
-- Billing and credit setup-pending states (not fake zero balances or empty fetched history)
+- Current-package renewal confirmation, secure Square checkout and payment/renewal status
+- New order history with sandbox labels and recoverable original orders
 - Account refresh, stale-data notice, and independent sign-out
 - Automatic verification of an encrypted saved login on restart, retry without retyping after an outage, and removal on explicit sign-out
 
-The complete service-change/billing designs remain in the visual companion for future backend integration. Real service-change and renewal controls are disabled until that integration exists.
+The original service-change designs remain in the historical visual companion. Current customer controls are renewal-only; package changes are reseller-managed.
 
 ### Build and run
 
@@ -81,7 +82,7 @@ Requires JDK 17 and Android SDK 36. Set `ANDROID_HOME` or create an ignored `loc
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Open **AM Account** and use an authorized test customer's Hub activation code or service username/password. The live app uses application ID `net.extremeiptv.account`; the original `.demo` APK can coexist. After successful verification, the original login is encrypted with AES-256-GCM and an app-specific Android Keystore key in app-private, no-backup storage. A code login saves the code, not the password returned by code resolution. A password login saves the entered service credentials encrypted. Raw secrets are not logged or saved in UI state/backups.
+Open **AM Account** after deployment and reseller opt-in, using an approved customer's Hub activation code or service username/password. The app uses application ID `net.extremeiptv.account`; the original `.demo` APK can coexist. After successful verification, the original login is encrypted with AES-256-GCM and an app-specific Android Keystore key in app-private, no-backup storage. A code login saves the code, not the password returned by code resolution. AM bearer tokens stay in memory. Raw secrets are not logged or saved in UI state/backups.
 
 On restart the app verifies the saved login before showing account data. A temporary outage preserves it and offers retry. Sign-out deletes the encrypted file and its key; revoked credentials are also removed. The account snapshot itself remains memory-only. A background/foreground transition refreshes the account. After updating from 0.2.0, sign in once to create the saved login.
 
@@ -100,6 +101,6 @@ Open [`docs/screens.html`](docs/screens.html) in a browser for the original fict
 ### Verification
 
 - Protocol/session and encrypted-login tests use synthetic responses. See `app/src/test` for restart, outage, rejection, late-callback, sign-out, tampering, and format validation coverage.
-- Version 0.2.1: 27 tests pass; debug APK builds; lint reports 0 errors and 10 dependency/SDK advisories. APK signature matches 0.2.0 for in-place test updates.
+- Version 0.3.0: 32 Android tests pass; APK builds; lint has zero errors. APK signing matches earlier test releases. PHP controller/payment/recovery and worker transactional tests pass locally; live deployment acceptance remains required.
 - Browser design companion checked at 360px width across 10 screens with no horizontal overflow or JavaScript errors. Verified selections reaching review, demo confirmation, bill filters, and invoice navigation.
 - Native runtime interaction has not been verified: the available emulator cannot start because this environment lacks KVM permissions.

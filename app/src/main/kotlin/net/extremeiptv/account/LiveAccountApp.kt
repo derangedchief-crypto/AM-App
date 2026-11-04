@@ -1,5 +1,8 @@
 package net.extremeiptv.account
 
+import android.content.Intent
+import android.net.Uri
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -34,7 +37,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import net.extremeiptv.account.data.ServiceAccount
 import net.extremeiptv.account.data.ServiceStatus
-import net.extremeiptv.account.data.ServiceAccountClient
+import net.extremeiptv.account.data.ManagedAccountClient
+import net.extremeiptv.account.data.RenewalOrder
+import net.extremeiptv.account.data.RenewalOffer
 import net.extremeiptv.account.data.EncryptedLoginStore
 import java.time.Instant
 import java.time.ZoneId
@@ -44,7 +49,7 @@ import java.time.format.FormatStyle
 @Composable
 internal fun LiveAccountApp() = AccountTheme {
     val context = LocalContext.current.applicationContext
-    val model: AccountViewModel = viewModel { AccountViewModel(ServiceAccountClient(), EncryptedLoginStore(context)) }
+    val model: AccountViewModel = viewModel { AccountViewModel(ManagedAccountClient(), EncryptedLoginStore(context)) }
     val state by model.state.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, model) {
@@ -60,7 +65,8 @@ internal fun LiveAccountApp() = AccountTheme {
         else LiveSignIn(state, model::signIn)
     } else {
         // Account changes/logouts dispose navigation and any visible private account details.
-        key(account.username) { LiveDashboard(account, state, model::refresh, model::signOut) }
+        key(account.username) { LiveDashboard(account, state, model::refresh, model::signOut,
+            model::requestQuote, model::confirmRenewal, model::dismissQuote, model::checkOrder) }
     }
 }
 
@@ -112,7 +118,7 @@ private fun LiveSignIn(state: LiveAccountState, onSignIn: (String, String, Strin
             }
             Text(if (state.busy) "Verifying your service…" else "Sign in", fontWeight = FontWeight.Bold)
         }
-        Hint("Uses the same service-provider login as Hub. AM Account keeps its own session; it does not sign you in or out of Hub.")
+        Hint("Your reseller must enable AM access for your service. AM verifies your service ownership and keeps its own session.")
         Hint("Your login is remembered securely on this device. AM verifies it automatically when you reopen the app. Signing out removes the saved login.")
     }
 }
@@ -134,7 +140,10 @@ private fun SavedLoginScreen(state: LiveAccountState, retry: () -> Unit, signOut
 }
 
 @Composable
-private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refresh: () -> Unit, signOut: () -> Unit) {
+private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refresh: () -> Unit, signOut: () -> Unit,
+    quote: (RenewalOffer) -> Unit, confirm: () -> Unit, dismissQuote: () -> Unit, checkOrder: (String) -> Unit) {
+    val context = LocalContext.current
+    var linkError by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf("Home") }
     var showLogout by remember { mutableStateOf(false) }
     val scroll = key(tab) { rememberScrollState() }
@@ -164,6 +173,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
             }
             if (state.busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             state.error?.let { ErrorNotice(if (state.stale) "$it\nShowing your last verified account details." else it) }
+            state.selectedOrder?.let { RenewalOrderCard(it, state.busy, checkOrder) }
             when (tab) {
                 "Home" -> {
                     Heading("Everything,\nin your control.", "Welcome, ${account.username}.")
@@ -175,7 +185,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                         Detail("Currently connected", account.activeConnections?.toString() ?: "Not provided")
                     }
                     Primary("View my service") { tab = "Services" }
-                    BillingUnavailable()
+                    RenewalOptions(account, state.busy || state.stale, quote)
                 }
                 "Services" -> {
                     Heading("Your service", "Verified details from your service provider.")
@@ -187,23 +197,20 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                         Detail("Status", account.status.label)
                         Detail("Expires", account.expiryText())
                         Detail("Connections", account.maxConnections?.toString() ?: "Not provided")
-                        Detail("Currently connected", account.activeConnections?.toString() ?: "Not provided")
                         Detail("Trial account", when (account.trial) { true -> "Yes"; false -> "No"; null -> "Not provided" })
-                        Detail("Created", account.createdAt?.let(::dateText) ?: "Not provided")
-                        Detail("Subscription length", "Not provided by this API")
                     }
                     BoxCard {
                         Label("BOUQUETS")
-                        Text("Bouquet connection pending", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                        Hint("Your assigned bouquets will appear here once AM's worker is connected. The current provider login API does not return your bouquet names.")
+                        if (account.bouquets.isEmpty()) Hint("No bouquets are assigned to this service.")
+                        else account.bouquets.forEach { Text(it, fontSize = 16.sp) }
                     }
-                    Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) { Text("Renewal — setup pending") }
-                    Hint("Contact your reseller for package, connection or bouquet changes. AM will only offer renewal of your current package once checkout is connected.")
+                    RenewalOptions(account, state.busy || state.stale, quote)
+                    Hint("Contact your reseller for package, connection or bouquet changes. AM only renews your current package.")
                 }
                 "Bills" -> {
                     Heading("Your bills", "Renewal payments and invoices.")
-                    BillingUnavailable()
-                    Hint("New transactions will build your history here once billing is enabled.")
+                    if (state.orders.isEmpty()) Hint("No AM orders yet. Your new renewal orders will appear here.")
+                    state.orders.forEach { RenewalOrderCard(it, state.busy, checkOrder) }
                 }
                 "Account" -> {
                     Heading("Your account", "Your service, connected independently.")
@@ -211,10 +218,19 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                         Label("SIGNED IN AS")
                         Text(account.username, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                         Detail("Account status", account.status.label)
-                        Detail("App version", "0.2.2 · Live read-only")
+                        Detail("App version", "0.3.0 · Connected renewals")
+                        Detail("Provider", account.providerName.ifBlank { "Your reseller" })
+                        if (account.supportEmail.isNotBlank()) Detail("Reseller support", account.supportEmail)
                         Detail("Login", if (state.remembered) "Remembered on this device" else "Not saved on this device")
                     }
                     Hint("AM Account uses its own login code and session. No Hub settings, devices, profiles or subscriptions are changed by this app.")
+                    if (account.supportEmail.isNotBlank()) Secondary("Contact reseller") {
+                        linkError = runCatching { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.fromParts("mailto", account.supportEmail, null))) }.isFailure
+                    }
+                    Secondary("App downloads and updates") {
+                        linkError = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/derangedchief-crypto/AM-App/releases"))) }.isFailure
+                    }
+                    if (linkError) Hint("No compatible app could open this link. Use your browser or email app to contact your reseller.")
                     Secondary("Sign out") { showLogout = true }
                 }
             }
@@ -225,6 +241,19 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
         text = { Text("Your saved login will be removed from this device. Your Hub login is unaffected.") },
         confirmButton = { TextButton(onClick = { showLogout = false; signOut() }) { Text("Sign out") } },
         dismissButton = { TextButton(onClick = { showLogout = false }) { Text("Cancel") } })
+    state.quote?.let { q ->
+        AlertDialog(onDismissRequest = dismissQuote, title = { Text(if (q.mode == "sandbox") "Confirm sandbox test" else "Confirm renewal") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(q.offer.name)
+                Text("${q.offer.duration} ${q.offer.period} · ${q.offer.connections} connection(s)")
+                Text(q.offer.price, fontWeight = FontWeight.Bold)
+                Text(if (q.mode == "sandbox") "Test only. No real charge or service renewal."
+                    else "Your current package will be renewed after verified payment. Remaining service time is preserved. Receipt item: Payment.")
+                state.error?.let { Text(it, color = Amber) }
+            } },
+            confirmButton = { TextButton(onClick = confirm, enabled = !state.busy) { Text(if (state.busy) "Processing…" else "Confirm") } },
+            dismissButton = { TextButton(onClick = dismissQuote, enabled = !state.busy) { Text("Back") } })
+    }
 }
 
 @Composable
@@ -239,10 +268,35 @@ private fun LiveServiceCard(account: ServiceAccount) = BoxCard {
 }
 
 @Composable
-private fun BillingUnavailable() = BoxCard {
-    Label("BILLING SETUP PENDING")
-    Text("Your service is connected.\nBilling is next.", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-    Hint("Invoice history and renewal payments need the new billing database. This app has not created or charged an invoice.")
+private fun RenewalOptions(account: ServiceAccount, disabled: Boolean, quote: (RenewalOffer) -> Unit) = BoxCard {
+    Label("RENEW CURRENT PACKAGE")
+    if (account.renewalMode == "sandbox") Hint("Sandbox mode: test payments only; your service will not be renewed.")
+    if (account.offers.isEmpty()) Hint("Your reseller has not enabled an available renewal price for this service. Contact your reseller to renew.")
+    account.offers.forEach { offer ->
+        Text("${offer.duration} ${offer.period} · ${offer.connections} connection(s)")
+        Button(onClick = { quote(offer) }, enabled = !disabled, modifier = Modifier.fillMaxWidth()) { Text("Review renewal · ${offer.price}") }
+    }
+}
+
+@Composable
+private fun RenewalOrderCard(order: RenewalOrder, busy: Boolean, check: (String) -> Unit) = BoxCard {
+    val context = LocalContext.current
+    var browserError by remember { mutableStateOf(false) }
+    Label(if (order.mode == "sandbox") "SANDBOX ORDER" else "RENEWAL ORDER")
+    Text(order.name, fontWeight = FontWeight.Bold)
+    Text(order.price)
+    Hint("${dateTimeText(order.createdAt * 1000)} · ${order.id}")
+    Text(order.message)
+    order.checkoutUrl?.let { url ->
+        Button(enabled = !busy, onClick = {
+            browserError = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.isFailure
+        }, modifier = Modifier.fillMaxWidth()) { Text("Open secure Square checkout") }
+        Hint("After checkout, return here and check payment / renewal. Opening or returning from checkout does not confirm payment.")
+    }
+    if (browserError) Hint("Unable to open a browser. Install or enable a browser and try again.")
+    if (!order.complete) OutlinedButton(enabled = !busy, onClick = { check(order.id) }, modifier = Modifier.fillMaxWidth()) {
+        Text("Check payment / renewal")
+    }
 }
 
 @Composable

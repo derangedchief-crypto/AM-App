@@ -9,7 +9,15 @@ if (!is_string($id) || !preg_match('/^[a-f0-9]{32}$/D', $id)) { http_response_co
 require_once __DIR__ . '/Square.php';
 try {
     $raw = file_get_contents('php://input', false, null, 0, 65537);
-    $store = new \AmAccount\SquareStore(require __DIR__ . '/settings-config.php', new \AmAccount\Square());
+    require_once __DIR__ . '/Settings.php';
+    require_once __DIR__ . '/Pricing.php';
+    require_once __DIR__ . '/Customer.php';
+    require_once dirname(__DIR__) . '/includes/functions.php';
+    require_once dirname(__DIR__) . '/includes/auth.php';
+    $config = require __DIR__ . '/settings-config.php';
+    $api = new \AmAccount\Square();
+    $customers = new \AmAccount\CustomerService($config,static fn($path,$body)=>call_auth_worker($path,$body),$api);
+    $store = new \AmAccount\SquareStore($config,$api,static fn($reseller,$connection,$order)=>$customers->notification($reseller,$connection,$order));
     $store->webhook($id, $raw, $_SERVER['HTTP_X_SQUARE_HMACSHA256_SIGNATURE'] ?? '');
     echo '{"accepted":true}';
 } catch (InvalidArgumentException | JsonException $error) {

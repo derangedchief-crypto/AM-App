@@ -30,6 +30,7 @@ try {
 require_once __DIR__ . '/Settings.php';
 require_once __DIR__ . '/Square.php';
 require_once __DIR__ . '/Pricing.php';
+require_once __DIR__ . '/Customer.php';
 $errorMessage = null;
 $square = null;
 $squareConnections = [];
@@ -41,6 +42,19 @@ try {
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         csrf_check();
         $action = $_POST['action'] ?? 'settings';
+        if ($action === 'customer_retry') {
+            if (!is_string($_POST['order_id'] ?? null) || !preg_match('/^[a-f0-9]{32}$/D',$_POST['order_id'])) throw new InvalidArgumentException('Invalid order reference.');
+            $customers = new \AmAccount\CustomerService($config,static fn($path,$body)=>call_auth_worker($path,$body),new \AmAccount\Square());
+            $customers->retryOrder($resellerId,$_POST['order_id']);
+            header('Location: ' . url('am-app/#customer-orders'), true, 303); exit;
+        }
+        if ($action === 'customer_access') {
+            if (!is_string($_POST['line_id'] ?? null) || !in_array($_POST['enabled'] ?? null,['0','1'],true)) throw new InvalidArgumentException('Invalid customer access request.');
+            $customers = new \AmAccount\CustomerService($config,static fn($path,$body)=>call_auth_worker($path,$body),new \AmAccount\Square());
+            $customers->approve($resellerId,trim($_POST['line_id']),$_POST['enabled'] === '1');
+            $_SESSION['am_settings_saved'] = $resellerId;
+            header('Location: ' . url('am-app/#customer-access'), true, 303); exit;
+        }
         if ($action === 'package_price') {
             $catalogue = \AmAccount\PricingStore::catalogue(call_auth_worker('/packages', ['username' => $reseller['username']]));
             (new \AmAccount\PricingStore($config['database']))->save($resellerId, $_POST, $catalogue);
@@ -80,12 +94,19 @@ try {
     }
 } catch (\AmAccount\Conflict $error) {
     http_response_code(409); $errorMessage = $error->getMessage();
+} catch (\AmAccount\CustomerError $error) {
+    http_response_code($error->status); $errorMessage = $error->getMessage();
 } catch (InvalidArgumentException $error) {
     http_response_code(422); $errorMessage = $error->getMessage();
 } catch (Throwable $error) {
     http_response_code(503); $errorMessage = 'AM settings storage is unavailable. No reseller-panel settings were changed.';
 }
 $ready = isset($snapshot);
+$customerOrders = []; $customerOrdersError = null;
+try {
+    if (!$ready) throw new RuntimeException('Storage unavailable.');
+    $customerOrders = (new \AmAccount\CustomerService($config,static fn($path,$body)=>call_auth_worker($path,$body),new \AmAccount\Square()))->resellerOrders($resellerId);
+} catch (Throwable $error) { $customerOrdersError = 'Customer order storage is unavailable. Install the customer API update.'; }
 $settings = $snapshot['settings'] ?? \AmAccount\Settings::defaults();
 try { if ($square) $squareConnections = $square->connections($resellerId); }
 catch (Throwable $error) { $square = null; $errorMessage = 'Square settings are unavailable. Complete the gateway update and reload.'; }
@@ -153,7 +174,7 @@ function am_selected(string $value, string $expected): string { return $value ==
 <div class="am-top"><div><div class="am-status">Private preview · hidden from navigation</div><h1>AM App management</h1>
 <p class="am-muted">Settings for <?= e((string)($reseller['display_name'] ?? $reseller['username'] ?? 'your reseller account')) ?>.</p></div>
 <a class="btn" href="<?= e(url('dashboard.php')) ?>">Back to reseller panel</a></div>
-<div class="am-notice"><strong>Customer integration preview.</strong> Access and service switches save preferences only. Square can now be connected and tested below; gateway tests do not renew or modify a customer's service.</div>
+<div class="am-notice"><strong>Customer integration preview.</strong> Customer access and renewal require the AM worker add-on and a compatible app. Sandbox customer checkout and gateway setup tests never renew a service. Production customer checkout verifies payment before renewal.</div>
 <?php if ($saved): ?><div class="flash success" role="status">Your AM settings were saved for this reseller account.</div><?php endif; ?>
 <?php if ($errorMessage): ?><div class="flash error" role="alert"><?= e($errorMessage) ?></div><?php endif; ?>
 <?php if ($squareSaved): ?><div class="flash success" role="status">Square operation completed. Check the connection and verified test status below.</div><?php endif; ?>
@@ -163,14 +184,14 @@ function am_selected(string $value, string $expected): string { return $value ==
 <?= csrf_field() ?><input type="hidden" name="revision" value="<?= (int)($snapshot['revision'] ?? 0) ?>">
 <fieldset<?= $ready ? '' : ' disabled' ?>><div class="am-grid">
 <section class="card"><h2>Customer access</h2>
-<label class="am-switch"><input type="checkbox" name="app_enabled" value="1"<?= am_checked($settings['app_enabled']) ?>><span>Enable AM for my customers<small class="am-muted">Saved participation preference. Activation requires the customer API rollout.</small></span></label>
+<label class="am-switch"><input type="checkbox" name="app_enabled" value="1"<?= am_checked($settings['app_enabled']) ?>><span>Enable AM for my customers<small class="am-muted">The customer API checks this setting at every login and request.</small></span></label>
 <label class="am-field"><span>Who can use the app?</span><select name="customer_policy"><option value="selected"<?= am_selected($settings['customer_policy'], 'selected') ?>>Only customers I approve</option><option value="all"<?= am_selected($settings['customer_policy'], 'all') ?>>All customers belonging to me</option></select></label>
-<p class="am-muted">Individual customer approval will be managed here after the customer lookup is connected. No customers are implicitly approved under the selected-customer policy.</p>
+<p class="am-muted">Approve individual services below. Revoking access blocks that service even under the all-customers policy.</p>
 <label class="am-field"><span>Provider display name</span><input type="text" name="display_name" maxlength="120" value="<?= e($settings['display_name']) ?>"></label>
 <label class="am-field"><span>Customer support email</span><input type="email" name="support_email" maxlength="254" value="<?= e($settings['support_email']) ?>"></label>
 </section>
-<section class="card"><h2>Service permissions</h2><p class="am-muted">Choose the actions you want to offer when their backend is connected.</p>
-<?php foreach (['allow_bouquets' => 'Add or remove permitted bouquets', 'allow_packages' => 'Change package', 'allow_connections' => 'Change connection count', 'allow_renewals' => 'Renew or extend subscription'] as $field => $label): ?>
+<section class="card"><h2>Renewal permission</h2><p class="am-muted">Customers can renew their current package only. Package, connection and bouquet changes must be handled by their reseller.</p>
+<?php foreach (['allow_renewals' => 'Renew or extend current subscription'] as $field => $label): ?>
 <label class="am-switch"><input type="checkbox" name="<?= e($field) ?>" value="1"<?= am_checked($settings[$field]) ?>><span><?= e($label) ?></span></label>
 <?php endforeach; ?>
 <p class="am-muted">Services show the package and bouquets, without categories. Customer choices must stay within the permitted package and bouquet catalogue.</p>
@@ -182,19 +203,27 @@ function am_selected(string $value, string $expected): string { return $value ==
 <label class="am-field"><span>Existing HTTPS billing page</span><input type="url" name="billing_url" maxlength="2048" placeholder="https://billing.example.com/" value="<?= e($settings['billing_url']) ?>"></label>
 <p class="am-muted">Your public customer billing destination, not an API endpoint or secret. A link alone cannot verify payment or automatically renew a service.</p></div>
 <div><label class="am-field"><span>Customer billing currency</span><select name="currency"><option value="CAD"<?= am_selected($settings['currency'], 'CAD') ?>>CAD</option><option value="USD"<?= am_selected($settings['currency'], 'USD') ?>>USD</option></select></label>
+<label class="am-field"><span>Customer Square checkout mode</span><select name="square_mode"><option value="sandbox"<?= am_selected($settings['square_mode'], 'sandbox') ?>>Sandbox · no real payment or renewal</option><option value="live"<?= am_selected($settings['square_mode'], 'live') ?>>Production · real payment and renewal</option></select></label>
 <div class="am-muted">Gateway preferences · merchant setup pending</div>
 <?php foreach (['stripe' => 'Stripe', 'square' => 'Square', 'rampex' => 'Rampex'] as $value => $label): ?>
 <label class="am-switch"><input type="checkbox" name="gateways[]" value="<?= e($value) ?>"<?= am_checked(in_array($value, $settings['gateways'], true)) ?>><span><?= e($label) ?></span></label>
 <?php endforeach; ?>
-<p class="am-muted">Connect Square below. Stripe and Rampex setup remain pending. Customer pricing and automatic service fulfilment are not connected yet.</p></div>
-</div><div class="am-notice">Unused value from downgrades or fewer connections will become <strong>customer account credit</strong>. Proration rules and the customer ledger are still being connected. Reseller wholesale credits are separate.</div>
+<p class="am-muted">Connect Square below. Customer renewal requires integrated billing and Square selected. Stripe and Rampex setup remain pending.</p></div>
+</div><div class="am-notice">AM checkout is <strong>renewal-only</strong>. Customers must contact their reseller for package or connection changes.</div>
 </section></div>
 <div class="am-actions"><span class="am-muted">Only this reseller's AM settings are saved. No existing service is changed.</span><button class="btn btn-primary" type="submit">Save AM settings</button></div>
 </fieldset></form>
+<section id="customer-access" class="card am-square"><h2>Individual customer access</h2>
+<p class="am-muted">Enter the customer's numeric service ID from your reseller panel. The worker verifies that the service belongs to your account.</p>
+<form method="post" action="<?= e(url('am-app/#customer-access')) ?>">
+<?= csrf_field() ?><input type="hidden" name="action" value="customer_access">
+<label class="am-field"><span>Customer service ID</span><input type="text" name="line_id" inputmode="numeric" pattern="[1-9][0-9]{0,17}" required></label>
+<label class="am-field"><span>Access</span><select name="enabled"><option value="1">Approve</option><option value="0">Revoke</option></select></label>
+<button class="btn btn-primary" type="submit">Save customer access</button></form></section>
 <section id="pricing" class="card am-square">
 <h2>Package renewal prices</h2>
 <p>Set your own customer price for each package offered to your reseller account. The service renewal still deducts the package's fixed credit cost from your reseller balance. <strong>Bouquets have no extra charge.</strong></p>
-<p class="am-muted">Prices are saved here now. Customer checkout and automatic renewal are still being connected. 0.00 means a free customer renewal; you still pay the wholesale credits.</p>
+<p class="am-muted">Customers only see prices for their current package. 0.00 means a free customer renewal; you still pay the wholesale credits. Production mode renews after payment verification; sandbox never modifies service.</p>
 <form method="get" action="<?= e(url('am-app/#pricing')) ?>"><label class="am-field"><span>Price currency</span><select name="prices_currency"><option value="CAD"<?= am_selected($priceCurrency, 'CAD') ?>>CAD</option><option value="USD"<?= am_selected($priceCurrency, 'USD') ?>>USD</option></select></label><button class="btn" type="submit">Show prices</button></form>
 <?php if ($pricingError): ?><p role="alert"><?= e($pricingError) ?></p>
 <?php elseif (!$catalogue): ?><p>No packages are currently offered to this reseller account.</p>
@@ -211,6 +240,16 @@ function am_selected(string $value, string $expected): string { return $value ==
 </form>
 <?php endforeach; endif; ?>
 </section>
+<section id="customer-orders" class="card am-square"><h2>Customer renewal orders</h2>
+<p class="am-muted">Most recent 50 orders for your customers. Retry checks the original payment and renewal ID; it does not create another invoice. If a paid order needs review, check your wholesale credit balance, customer access and package availability before retrying.</p>
+<?php if ($customerOrdersError): ?><p role="alert"><?= e($customerOrdersError) ?></p>
+<?php elseif (!$customerOrders): ?><p>No customer orders yet.</p><?php else: foreach ($customerOrders as $order): ?>
+<div class="am-notice"><strong><?= e($order['package_name']) ?></strong>
+<p>Service #<?= e($order['line_id']) ?> · <?= e(number_format($order['amount_minor']/100,2,'.','')) ?> <?= e($order['currency']) ?> · <?= e($order['mode']) ?></p>
+<p><?= e($order['message']) ?></p><p class="am-muted">Order <?= e($order['id']) ?> · <?= e($order['state']) ?></p>
+<?php if (!in_array($order['state'],['applied','sandbox_verified'],true)): ?>
+<form method="post" action="<?= e(url('am-app/#customer-orders')) ?>"><?= csrf_field() ?><input type="hidden" name="action" value="customer_retry"><input type="hidden" name="order_id" value="<?= e($order['id']) ?>"><button class="btn" type="submit">Retry original order</button></form>
+<?php endif; ?></div><?php endforeach; endif; ?></section>
 <section id="square" class="card am-square">
 <h2>Square · merchant connection &amp; checkout test</h2>
 <p class="am-muted">Uses the Hub-style Square-hosted checkout. Card details stay with Square; AM checks the merchant, location, amount, currency and captured payment on the server. Credentials are encrypted in private storage and are never shown again.</p>

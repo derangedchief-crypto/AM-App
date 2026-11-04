@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import tempfile
 
-PANEL_FILES = ('Settings.php', 'Square.php', 'Pricing.php', 'square-webhook.php', 'index.php')
+PANEL_FILES = ('Settings.php', 'Square.php', 'Pricing.php', 'Customer.php', 'customer-api.php', 'payment-return.php', 'square-webhook.php', 'index.php')
 
 
 def write_config(path, state, public_url):
@@ -104,6 +104,8 @@ def install():
         subprocess.run(php + ['-r', 'require $argv[1]; \\AmAccount\\PricingStore::migrate($argv[2]);',
                               str(stage / 'Pricing.php'), str(state / 'settings.sqlite')], check=True)
         (state / 'gateway.key').write_bytes(os.urandom(32))
+        subprocess.run(php + ['-r', 'require $argv[1]; \\AmAccount\\CustomerService::migrate($argv[2]);',
+                              str(stage / 'Customer.php'), str(state / 'settings.sqlite')], check=True)
         write_config(stage / 'settings-config.php', state, args.public_url)
         (stage / '.user.ini').write_text('open_basedir="' + ':'.join(paths) + '"\ndisplay_errors=Off\n')
         for path in [state, *state.iterdir(), stage, *stage.iterdir()]:
@@ -119,7 +121,7 @@ def install():
         raise
     print('Installed. Open /am-app/ while signed into the reseller website.', flush=True)
     print('No existing portal files were edited. No services were restarted.')
-    print('Square connection and isolated gateway tests are available. Customer API and service renewals remain pending.')
+    print('Customer API installed. Customer access requires the AM worker routes and reseller opt-in. Checkout defaults to sandbox.')
     print('If storage is unavailable, check PHP-FPM open_basedir: a pool-level restriction cannot be expanded by .user.ini.')
 
 

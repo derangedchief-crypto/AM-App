@@ -11,8 +11,8 @@ android {
         applicationId = "net.extremeiptv.account"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.2.2-live-readonly"
+        versionCode = 5
+        versionName = "0.3.0-connected-renewals"
     }
     buildFeatures { compose = true }
     compileOptions {

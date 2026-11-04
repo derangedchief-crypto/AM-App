@@ -62,6 +62,8 @@ def run():
         root = Path(temp)
         (root / 'includes').mkdir()
         (root / 'includes/bootstrap.php').write_text(BOOTSTRAP)
+        (root / 'includes/functions.php').write_text('<?php')
+        (root / 'includes/auth.php').write_text('<?php')
         (root / 'fixture.php').write_text(FIXTURE)
         shutil.copytree(SOURCE / 'panel', root / 'am-app')
         db = root / 'settings.sqlite'
@@ -72,6 +74,8 @@ def run():
         subprocess.run([PHP, '-r', 'require $argv[1]; \\AmAccount\\PricingStore::migrate($argv[2]);',
                         str(root / 'am-app/Pricing.php'), str(db)], check=True)
         (root / 'gateway.key').write_bytes(os.urandom(32))
+        subprocess.run([PHP, '-r', 'require $argv[1]; \\AmAccount\\CustomerService::migrate($argv[2]);',
+                        str(root / 'am-app/Customer.php'), str(db)], check=True)
         (root / 'am-app/settings-config.php').write_text("<?php return ['database' => " + repr(str(db)) + ", 'secret_key' => " + repr(str(root / 'gateway.key')) + ", 'public_url' => 'https://panel.example.com/am-app'];")
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
