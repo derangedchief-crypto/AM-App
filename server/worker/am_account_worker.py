@@ -56,6 +56,17 @@ class Customer(Owner):
     line_id: str = Field(pattern=r"^[1-9][0-9]{0,17}$")
 
 
+class ResellerSearch(Input):
+    query: str = Field(default="", max_length=100)
+    reseller_ids: list[str] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="after")
+    def valid_ids(self):
+        for value in self.reseller_ids:
+            Owner(reseller_id=value)
+        return self
+
+
 class Quote(Customer):
     package_id: int = Field(ge=1, le=2147483647)
 
@@ -120,6 +131,21 @@ LINE_COLUMNS = "id,member_id,username,password,activation_code,package_id,max_co
 class Service:
     def __init__(self, worker):
         self.w = worker
+
+    def resellers(self, request):
+        # users is the panel reseller directory; customer logins live in customers.
+        with self.w["panel_db_cursor"]() as (cur, _):
+            if request.reseller_ids:
+                cur.execute("SELECT id,username,status FROM users WHERE id IN (" +
+                            ",".join(["%s"] * len(request.reseller_ids)) + ") ORDER BY username,id",
+                            tuple(request.reseller_ids))
+            else:
+                cur.execute("SELECT id,username,status FROM users WHERE LOCATE(%s,username)>0 ORDER BY username,id LIMIT 201",
+                            (request.query.strip(),))
+            rows = cur.fetchall()
+        return {"ok": True, "more": len(rows) > 200, "resellers": [
+            {"id": str(row["id"]), "username": str(row["username"]), "enabled": int(row.get("status") or 0) == 1}
+            for row in rows[:200]]}
 
     @contextmanager
     def transaction(self):
@@ -387,6 +413,7 @@ def register(app, worker):
         app.add_api_route(path, handler, methods=["POST"], name="am_" + path.rsplit("/", 1)[-1])
 
     add("/am/customer-auth", Login, service.login)
+    add("/am/admin-resellers", ResellerSearch, service.resellers)
     add("/am/capabilities", Input, lambda _: {"ok": True, "version": 1, "authoritative_ownership": True, "idempotent_renewal": True, "bouquet_editing": True, "unlimited_bouquets": True})
     add("/am/customer", Customer, service.customer)
     add("/am/customer-bouquets", BouquetUpdate, service.update_bouquets)

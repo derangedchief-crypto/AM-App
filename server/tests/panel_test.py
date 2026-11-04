@@ -22,6 +22,11 @@ function require_login() {
     return $_SESSION['reseller'];
 }
 function call_auth_worker($route, $body) {
+    if ($route === '/am/admin-resellers') {
+        if (!empty($_SESSION['outage'])) throw new Exception('Worker unavailable');
+        $rows=[['id'=>'1','username'=>'Alpha reseller','enabled'=>true],['id'=>'2','username'=>'Beta reseller','enabled'=>true]];
+        return ['ok'=>true,'more'=>false,'resellers'=>array_values(array_filter($rows,static fn($r)=>isset($body['reseller_ids'])?in_array($r['id'],$body['reseller_ids'],true):stripos($r['username'],$body['query'] ?? '')!==false))];
+    }
     if ($route === '/am/customer') {
         if ($body !== ['reseller_id'=>(string)$_SESSION['reseller']['id'],'line_id'=>'10']) return ['ok'=>false];
         return ['ok'=>true,'reseller_id'=>(string)$_SESSION['reseller']['id'],'auth_revision'=>'fixture','line'=>['line_id'=>'10','package_id'=>(int)$_SESSION['reseller']['id'],'package_name'=>'Fixture package','max_connections'=>2,'expire_at'=>1900000000,'activated'=>true]];
@@ -207,13 +212,24 @@ def run():
                 subprocess.run(['node',str(SOURCE / 'tests/panel_browser_test.cjs'),f'http://127.0.0.1:{port}'],check=True)
             login('user=1')
             assert request('/am-app/licenses-admin.php')[0] == 403
+            assert request('/am-app/licenses-admin.php?reseller_search=Alpha')[0] == 403
             for query in ['user=1&admin=1&staff=1','user=1&admin=1&impersonation=1']:
                 login(query)
                 assert request('/am-app/licenses-admin.php')[0] == 403
+                assert request('/am-app/licenses-admin.php?reseller_search=Alpha')[0] == 403
             login('user=1&admin=1')
             admin_path='/am-app/licenses-admin.php'
             admin_body=request(admin_path)[1]
+            assert 'Alpha reseller' in admin_body and 'name="reseller_id" inputmode' not in admin_body
+            assert 'Beta reseller' not in request(admin_path+'?reseller_search=Alpha')[1]
+            assert '"resellers":[]' in request(admin_path+'?reseller_search=missing')[1]
             csrf=re.search('name="csrf" value="([^"]*)"',admin_body).group(1)
+            assert request(admin_path,{'csrf':csrf,'action':'issue','reseller_id':'999','expires':''})[0] == 422
+            login('user=1&admin=1&outage=1')
+            assert request(admin_path+'?reseller_search=Alpha')[0] == 503
+            assert 'Reseller list unavailable' in request(admin_path)[1]
+            login('user=1&admin=1')
+            csrf=re.search('name="csrf" value="([^"]*)"',request(admin_path)[1]).group(1)
             assert request(admin_path,{'action':'issue','reseller_id':'1','expires':''})[0] == 419
             assert request(admin_path,{'csrf':csrf,'action':'issue','reseller_id':'1','expires':''})[0] == 422
             assert request(admin_path,{'csrf':csrf,'action':'issue','reseller_id':'1','expires':'','replace':'1'})[0] == 303

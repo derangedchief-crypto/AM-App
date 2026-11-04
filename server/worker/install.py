@@ -14,6 +14,7 @@ import tempfile
 
 MARKER = '# AM_ACCOUNT_CONTRACT_V1'
 UPGRADE_FROM = {'0142cf410c12082edcd0c5116f9966e969ef733ca79bd3126ffe47d6a7004d3a',
+                '8492411b183b4177847e91eaced32c80be00b33743280bc228eb42db63c4f9cf',
                 '5dae9848c8eedfef24eb6bcc877a15fed1e0cc27481674ca6243494f51c62343',
                 '285c798f3f93387647a37aa863c6fafbd8f0bdd2671d7e635cb61ae02cad4527'}
 EXPECTED = {

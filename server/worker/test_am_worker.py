@@ -27,6 +27,7 @@ import install
 class Cursor:
     def __init__(self, db): self.cursor = db.cursor()
     def execute(self, sql, args=()):
+        sql = sql.replace('LOCATE(%s,username)', 'instr(username,%s)')
         sql = sql.replace('%s', '?').replace(' FOR UPDATE', '').replace('NOW()', 'CURRENT_TIMESTAMP')
         self.cursor.execute(sql, args)
     def fetchone(self):
@@ -94,6 +95,23 @@ class WorkerTest(unittest.TestCase):
         self.service = Service(self.w)
 
     def tearDown(self): self.temp.cleanup()
+
+    def test_admin_reseller_directory(self):
+        from am_account_worker import ResellerSearch
+        result = self.service.resellers(ResellerSearch(query='seller1'))
+        self.assertEqual(result['resellers'], [{'id':'1','username':'seller1','enabled':True}])
+        self.assertEqual(self.service.resellers(ResellerSearch(query="%' OR 1=1"))['resellers'], [])
+        self.assertEqual(self.service.resellers(ResellerSearch(reseller_ids=['2']))['resellers'][0]['id'], '2')
+        with self.cursor() as (cur, conn):
+            for i in range(3,205):
+                cur.execute('INSERT INTO users VALUES (%s,%s,0,0,1,%s)', (i,'seller'+str(i),'[]'))
+            conn.commit()
+        result = self.service.resellers(ResellerSearch())
+        self.assertTrue(result['more'])
+        self.assertEqual(len(result['resellers']),200)
+        app=FastAPI(); register(app,self.w)
+        with TestClient(app) as client:
+            self.assertEqual(client.post('/am/admin-resellers',json={'query':''}).status_code,401)
 
     def test_active_connections_match_panel_and_do_not_affect_revisions(self):
         with self.cursor() as (cur, _):
