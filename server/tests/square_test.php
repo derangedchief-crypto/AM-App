@@ -21,6 +21,12 @@ $transport = function ($path, $body, $c) use (&$merchant, &$paid, &$external, &$
     if ($path === '/v2/merchants/me') return ['merchant' => ['id' => $merchant, 'status' => 'ACTIVE', 'country' => 'CA', 'business_name' => 'Fixture shop']];
     if ($path === '/v2/locations/loc1') return ['location' => ['id' => 'loc1', 'merchant_id' => $mismatch === 'merchant' ? 'other' : $merchant, 'country' => 'CA', 'currency' => 'CAD', 'status' => 'ACTIVE', 'capabilities' => ['CREDIT_CARD_PROCESSING']]];
     if ($path === '/v2/online-checkout/payment-links') {
+        check($body['order']['line_items'][0]['name'] === 'Payment', 'Receipt item must say only Payment');
+        foreach ([$body, $body['order'], $body['order']['line_items'][0]] as $receiptFields) {
+            foreach (['note', 'payment_note', 'description', 'memo'] as $field) {
+                check(!array_key_exists($field, $receiptFields), 'No receipt notes or memos');
+            }
+        }
         check($body['checkout_options']['allow_tipping'] === false, 'No tips');
         check($body['checkout_options']['accepted_payment_methods']['cash_app_pay'] === false, 'No alternate settlement');
         $id = $body['idempotency_key'];

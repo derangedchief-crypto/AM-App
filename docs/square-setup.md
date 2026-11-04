@@ -10,6 +10,8 @@ Reviewed `derangedchief-crypto/ARVIO` main at `1effc23071da1556cfa1fb11c44d1b3a9
 
 AM owns its new implementation. No Hub source, configuration, secrets or deployment is modified.
 
+All newly created AM payment links use the receipt item name **Payment**, with no AM-supplied payment note, item note, memo or description. Technical order references remain for verification. Existing Square links/receipts keep the text they were created with; Square's standard merchant, amount and transaction details are provider-controlled. Future customer checkout integrations must retain this receipt-label rule.
+
 ## What is available now
 
 The hidden `/am-app/` page can connect Square sandbox or production, verify its merchant and card-enabled CAD/USD location, and run one **1.00 currency-unit setup checkout per connection**. These are reseller-operated gateway tests, not customer invoices or subscriptions. Sandbox uses test money. Production checkout requires explicit real-charge confirmation and uses real money; any refund is handled in Square Dashboard.

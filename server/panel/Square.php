@@ -72,7 +72,7 @@ final class Square
     {
         $reply = $this->request($c, '/v2/online-checkout/payment-links', [
             'idempotency_key' => $o['id'], 'order' => ['location_id' => $c['location_id'], 'reference_id' => $o['id'],
-                'line_items' => [['name' => 'AM gateway setup test (no service renewal)', 'quantity' => '1',
+                'line_items' => [['name' => 'Payment', 'quantity' => '1',
                     'base_price_money' => ['amount' => (int)$o['amount_minor'], 'currency' => $o['currency']]]]],
             'checkout_options' => ['allow_tipping' => false, 'ask_for_shipping_address' => false, 'redirect_url' => $returnUrl,
                 'accepted_payment_methods' => ['apple_pay' => true, 'google_pay' => true, 'cash_app_pay' => false, 'afterpay_clearpay' => false]]]);
