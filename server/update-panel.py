@@ -61,6 +61,7 @@ def update():
     key.chmod(0o600)
     os.chown(key, owner.st_uid, owner.st_gid)
     subprocess.run(php + ['-r', 'require $argv[1]; \\AmAccount\\SquareStore::migrate($argv[2]);', str(source / 'Square.php'), str(database)], check=True)
+    subprocess.run(php + ['-r', 'require $argv[1]; \\AmAccount\\PricingStore::migrate($argv[2]);', str(source / 'Pricing.php'), str(database)], check=True)
     stage = Path(tempfile.mkdtemp(prefix='.am-update-', dir=site))
     try:
         installer.write_config(stage / 'settings-config.php', state, args.public_url)

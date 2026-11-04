@@ -38,6 +38,14 @@ Use PHP 8.1+ with PDO SQLite, sessions, OpenSSL and cURL. Installer/updater test
 
 ## Customer API architecture
 
+### Reseller package pricing
+
+The hidden page's **Package renewal prices** section reads the existing signed `/packages` endpoint for the authenticated reseller. Package ID, term, connection count and wholesale credit cost come from that worker; resellers enter only their own CAD/USD customer renewal amount and whether to offer it. Prices are isolated by reseller/package/currency, with revision conflict handling. No bouquet fees are added. Free retail renewals (0.00) still carry the normal wholesale credit debit.
+
+Run the updater to add `am_package_prices`; existing settings and gateway tests remain intact. Package pricing is not yet a live customer checkout or renewal endpoint. Current deployed worker ownership and exactly-once renewal contracts must be verified before those operations are enabled. On the separate worker host, `python3 server/inspect-worker-contract.py --worker /opt/iptv-auth-worker/main.py` provides a read-only, secret-free contract inventory; adjust the path if needed.
+
+Pricing tests: `php server/tests/pricing_test.php`. They verify reseller isolation, exact cents, fixed wholesale cost, free bouquets, stale package/price handling, unavailable packages, and disabled quotes.
+
 The owner approved hosting AM's API alongside the reseller website, provided the existing site remains intact. The existing reseller worker will be reused; a separate worker is no longer required.
 
 Updated scope: one universal app for participating resellers, with a new AM App section in the reseller panel for opt-in/customer access and reseller-specific billing/renewals. See `docs/multi-reseller-integration.md`. The latest owner-supplied terminal check confirms PHP 8.4 with cURL, PDO SQLite, OpenSSL, and populated worker connection settings. The original read-only inventory is no longer a prerequisite; current work must establish the customer-to-reseller lookup contract and billing routing model.

@@ -29,6 +29,7 @@ try {
 
 require_once __DIR__ . '/Settings.php';
 require_once __DIR__ . '/Square.php';
+require_once __DIR__ . '/Pricing.php';
 $errorMessage = null;
 $square = null;
 $squareConnections = [];
@@ -40,6 +41,12 @@ try {
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         csrf_check();
         $action = $_POST['action'] ?? 'settings';
+        if ($action === 'package_price') {
+            $catalogue = \AmAccount\PricingStore::catalogue(call_auth_worker('/packages', ['username' => $reseller['username']]));
+            (new \AmAccount\PricingStore($config['database']))->save($resellerId, $_POST, $catalogue);
+            $_SESSION['am_price_saved'] = $resellerId;
+            header('Location: ' . url('am-app/?prices_currency=' . $_POST['currency'] . '#pricing'), true, 303); exit;
+        }
         if ($action !== 'settings') {
             if (!$square) throw new InvalidArgumentException('Install the Square gateway update first.');
             $field = static function (string $name): string {
@@ -86,6 +93,16 @@ $saved = ($_SESSION['am_settings_saved'] ?? null) === $resellerId;
 unset($_SESSION['am_settings_saved']);
 $squareSaved = ($_SESSION['am_square_saved'] ?? null) === $resellerId;
 unset($_SESSION['am_square_saved']);
+$priceSaved = ($_SESSION['am_price_saved'] ?? null) === $resellerId;
+unset($_SESSION['am_price_saved']);
+$pricingError = null; $catalogue = []; $prices = [];
+$priceCurrency = $_GET['prices_currency'] ?? $settings['currency'];
+if (!is_string($priceCurrency) || !in_array($priceCurrency, ['CAD', 'USD'], true)) $priceCurrency = $settings['currency'];
+try {
+    if (!$ready) throw new RuntimeException('Storage unavailable.');
+    $catalogue = \AmAccount\PricingStore::catalogue(call_auth_worker('/packages', ['username' => $reseller['username']]));
+    $prices = (new \AmAccount\PricingStore($config['database']))->rows($resellerId);
+} catch (Throwable $error) { $pricingError = 'Package pricing could not be loaded. Check the AM update and worker connection, then reload. Square setup remains separate below.'; }
 function am_checked(bool $value): string { return $value ? ' checked' : ''; }
 function am_selected(string $value, string $expected): string { return $value === $expected ? ' selected' : ''; }
 ?>
@@ -128,6 +145,7 @@ function am_selected(string $value, string $expected): string { return $value ==
 .am-page fieldset{border:0;padding:0;margin:0;min-width:0}.am-page a{overflow-wrap:anywhere}
 .am-page input[type=password]{min-height:44px;background:var(--muted-bg,var(--card));color:var(--text)}
 .am-square{margin-top:24px}.am-square form{margin-top:18px}.am-square code{overflow-wrap:anywhere;white-space:normal}.am-square .btn{white-space:normal}
+.am-price{margin-top:18px;padding:18px;border:1px solid var(--border);border-radius:10px}.am-price h3{margin:0 0 8px}.am-page input[type=number]{background:var(--muted-bg,var(--card));color:var(--text);min-height:44px}
 @media(max-width:640px){.am-page .am-grid{grid-template-columns:1fr}.am-page{padding:20px 14px}.am-page .card{padding:18px}}
 </style>
 </head><body>
@@ -139,6 +157,7 @@ function am_selected(string $value, string $expected): string { return $value ==
 <?php if ($saved): ?><div class="flash success" role="status">Your AM settings were saved for this reseller account.</div><?php endif; ?>
 <?php if ($errorMessage): ?><div class="flash error" role="alert"><?= e($errorMessage) ?></div><?php endif; ?>
 <?php if ($squareSaved): ?><div class="flash success" role="status">Square operation completed. Check the connection and verified test status below.</div><?php endif; ?>
+<?php if ($priceSaved): ?><div class="flash success" role="status">Your customer renewal price was saved. The package's wholesale credit cost is unchanged.</div><?php endif; ?>
 <?php if (isset($_GET['square_return'])): ?><div class="am-notice">Returned from Square. Use <strong>Check payment with Square</strong> below. Returning here does not confirm payment.</div><?php endif; ?>
 <form method="post" action="<?= e(url('am-app/')) ?>">
 <?= csrf_field() ?><input type="hidden" name="revision" value="<?= (int)($snapshot['revision'] ?? 0) ?>">
@@ -172,6 +191,26 @@ function am_selected(string $value, string $expected): string { return $value ==
 </section></div>
 <div class="am-actions"><span class="am-muted">Only this reseller's AM settings are saved. No existing service is changed.</span><button class="btn btn-primary" type="submit">Save AM settings</button></div>
 </fieldset></form>
+<section id="pricing" class="card am-square">
+<h2>Package renewal prices</h2>
+<p>Set your own customer price for each package offered to your reseller account. The service renewal still deducts the package's fixed credit cost from your reseller balance. <strong>Bouquets have no extra charge.</strong></p>
+<p class="am-muted">Prices are saved here now. Customer checkout and automatic renewal are still being connected. 0.00 means a free customer renewal; you still pay the wholesale credits.</p>
+<form method="get" action="<?= e(url('am-app/#pricing')) ?>"><label class="am-field"><span>Price currency</span><select name="prices_currency"><option value="CAD"<?= am_selected($priceCurrency, 'CAD') ?>>CAD</option><option value="USD"<?= am_selected($priceCurrency, 'USD') ?>>USD</option></select></label><button class="btn" type="submit">Show prices</button></form>
+<?php if ($pricingError): ?><p role="alert"><?= e($pricingError) ?></p>
+<?php elseif (!$catalogue): ?><p>No packages are currently offered to this reseller account.</p>
+<?php else: foreach ($catalogue as $package): $price = $prices[$package['id'] . ':' . $priceCurrency] ?? null; ?>
+<form class="am-price" method="post" action="<?= e(url('am-app/')) ?>">
+<?= csrf_field() ?><input type="hidden" name="action" value="package_price"><input type="hidden" name="package_id" value="<?= $package['id'] ?>"><input type="hidden" name="currency" value="<?= e($priceCurrency) ?>"><input type="hidden" name="revision" value="<?= (int)($price['revision'] ?? 0) ?>"><input type="hidden" name="fingerprint" value="<?= e($package['fingerprint']) ?>">
+<h3><?= e($package['name']) ?></h3>
+<p class="am-muted">Package #<?= $package['id'] ?> · <?= e((string)($package['duration'] ?? '')) ?> <?= e((string)($package['duration_period'] ?? '')) ?> · <?= $package['max_connections'] ?> connection(s)</p>
+<p><strong>Your wholesale cost: <?= e($package['price_credits']) ?> credits per renewal.</strong></p>
+<?php if ($price && $price['package_fingerprint'] !== $package['fingerprint']): ?><p>Package details or wholesale cost changed. Review and save your price again before it can be offered.</p><?php endif; ?>
+<label class="am-field"><span>Customer renewal price · <?= e($priceCurrency) ?></span><input type="number" name="amount" min="0" max="999999.99" step="0.01" required value="<?= $price ? e(number_format((int)$price['amount_minor'] / 100, 2, '.', '')) : '' ?>"></label>
+<label class="am-switch"><input type="checkbox" name="enabled" value="1"<?= am_checked($price && (int)$price['enabled'] === 1) ?>><span>Offer this package for customer renewal</span></label>
+<button class="btn btn-primary" type="submit">Save package price</button>
+</form>
+<?php endforeach; endif; ?>
+</section>
 <section id="square" class="card am-square">
 <h2>Square · merchant connection &amp; checkout test</h2>
 <p class="am-muted">Uses the Hub-style Square-hosted checkout. Card details stay with Square; AM checks the merchant, location, amount, currency and captured payment on the server. Credentials are encrypted in private storage and are never shown again.</p>

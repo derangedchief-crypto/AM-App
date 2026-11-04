@@ -22,6 +22,9 @@ function require_login() {
     return $_SESSION['reseller'];
 }
 function call_auth_worker($route, $body) {
+    if ($route === '/packages' && $body['username'] === $_SESSION['reseller']['username']) {
+        return ['ok' => true, 'packages' => [['id' => (int)$_SESSION['reseller']['id'], 'name' => 'Fixture package', 'price_credits' => '3.50', 'max_connections' => 2, 'duration' => 1, 'duration_period' => 'months']]];
+    }
     if ($route !== '/panel-user-balance' || $body['panel_user_id'] !== $_SESSION['reseller']['id']) throw new Exception('Wrong scope');
     if (!empty($_SESSION['outage'])) throw new Exception('Worker unavailable');
     return ['ok' => true, 'is_enabled' => !empty($_SESSION['active'])];
@@ -66,6 +69,8 @@ def run():
                         str(root / 'am-app/Settings.php'), str(db)], check=True)
         subprocess.run([PHP, '-r', 'require $argv[1]; \\AmAccount\\SquareStore::migrate($argv[2]);',
                         str(root / 'am-app/Square.php'), str(db)], check=True)
+        subprocess.run([PHP, '-r', 'require $argv[1]; \\AmAccount\\PricingStore::migrate($argv[2]);',
+                        str(root / 'am-app/Pricing.php'), str(db)], check=True)
         (root / 'gateway.key').write_bytes(os.urandom(32))
         (root / 'am-app/settings-config.php').write_text("<?php return ['database' => " + repr(str(db)) + ", 'secret_key' => " + repr(str(root / 'gateway.key')) + ", 'public_url' => 'https://panel.example.com/am-app'];")
         with socket.socket() as sock:
@@ -109,6 +114,11 @@ def run():
             assert request()[0] == 503
             login('user=1')
             fields = form()
+            assert request(data={'action': 'package_price'})[0] == 419
+            price_fields = {key: re.search('name="' + key + '" value="([^"]*)"', request()[1]).group(1) for key in ['package_id', 'fingerprint']}
+            price_input = {**fields, **price_fields, 'action': 'package_price', 'currency': 'CAD', 'amount': '20.00', 'enabled': '1', 'reseller_id': '2', 'price_credits': '0'}
+            assert request(data=price_input)[0] == 303
+            assert request(data=price_input)[0] == 409
             assert request(data={'action': 'square_connect'})[0] == 419
             assert request(data={**fields, 'action': 'square_connect', 'mode': 'sandbox', 'token': 'invalid', 'location': 'loc1'})[0] == 422
             assert request(data={**fields, 'action': 'square_webhook', 'connection': 'other-reseller', 'webhook_key': 'fake-secret-key123456'})[0] == 422

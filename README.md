@@ -22,12 +22,13 @@ Universal Android customer account-management app for participating resellers an
 - Keep AM's implementation independent. Hub is a reference only: do not modify its app, backend functions, enrollment, settings, or deployment for this project.
 - Show services as package → bouquets, without categories. Adding/removing permitted bouquets changes channel access.
 - Remember the customer's original login securely across app restarts; explicit sign-out removes it.
+- Each reseller sets its own customer renewal price for every offered package. The worker's fixed package credit cost is still deducted from that reseller on renewal; retail money prices never overwrite wholesale credits. Bouquet selections carry no extra charge.
 
 ## Reseller panel and worker reference
 
 Use the owner's `derangedchief-crypto/Reseller-website` as the reference for package, bouquet, renewal, and connection-management functions. AM owns its copies/implementations; the reseller site and existing workers remain separate. See [`docs/reseller-worker-reference.md`](docs/reseller-worker-reference.md) for traced endpoints, known schema, and remaining deployment inputs. The live APK shows a bouquet setup-pending state until this backend is connected; category mapping is no longer needed.
 
-The hidden reseller management page at `/am-app/` is installed and saving preferences. [`server/`](server/README.md) now includes an updater, a site-theme fix, and Square merchant setup/hosted-checkout tests following Hub's flow; deployment of that update is pending. See [`docs/square-setup.md`](docs/square-setup.md) for private credential setup and payment verification. Customer APIs, subscription billing and service changes remain unconnected. See [`docs/multi-reseller-integration.md`](docs/multi-reseller-integration.md) for the architecture.
+The hidden reseller management page at `/am-app/` is installed and saving preferences. Square sandbox checkout and signed webhook verification have passed on the user's host. [`server/`](server/README.md) now also contains per-reseller package renewal pricing, showing fixed wholesale credit cost separately from editable customer money prices; that pricing update is pending deployment. See [`docs/square-setup.md`](docs/square-setup.md) for gateway setup. Customer ownership/session APIs and automatic paid renewal remain blocked on verification of the deployed worker's ownership and idempotent-renewal contracts. See [`docs/multi-reseller-integration.md`](docs/multi-reseller-integration.md).
 
 ## Billing reference for future integration
 

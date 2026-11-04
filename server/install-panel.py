@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import tempfile
 
-PANEL_FILES = ('Settings.php', 'Square.php', 'square-webhook.php', 'index.php')
+PANEL_FILES = ('Settings.php', 'Square.php', 'Pricing.php', 'square-webhook.php', 'index.php')
 
 
 def write_config(path, state, public_url):
@@ -101,6 +101,8 @@ def install():
                         str(stage / 'Settings.php'), str(state / 'settings.sqlite')], check=True)
         subprocess.run(php + ['-r', 'require $argv[1]; \\AmAccount\\SquareStore::migrate($argv[2]);',
                               str(stage / 'Square.php'), str(state / 'settings.sqlite')], check=True)
+        subprocess.run(php + ['-r', 'require $argv[1]; \\AmAccount\\PricingStore::migrate($argv[2]);',
+                              str(stage / 'Pricing.php'), str(state / 'settings.sqlite')], check=True)
         (state / 'gateway.key').write_bytes(os.urandom(32))
         write_config(stage / 'settings-config.php', state, args.public_url)
         (stage / '.user.ini').write_text('open_basedir="' + ':'.join(paths) + '"\ndisplay_errors=Off\n')

@@ -40,9 +40,15 @@ The reviewed `/lines` endpoint requires a reseller username and can return many 
 
 Invoices, credits, checkout references, webhooks, and idempotency keys must carry the reseller/line scope. Disabling access or changing ownership must revoke/re-evaluate prior sessions and pending actions. Do not transfer credit between resellers implicitly. Cross-reseller access tests are required even where numeric IDs overlap across external integrations.
 
-## Billing question to settle
+## Billing model and integration
 
-Does **their own billing flow** mean a reseller-configured external HTTPS payment/customer-portal URL, an integrated checkout using their merchant account based on the existing Hub flow, or support for both?
+Confirmed November 4: customer billing is for **renewals**, not bouquets. Every reseller maps offered worker package IDs to its own customer money prices. The worker's `price_credits` remains the fixed wholesale renewal cost charged to that reseller; no retail-money-to-credit conversion is implied. Square is the first requested integrated gateway. Customer prices must be sourced from the owning reseller's server-side mapping, never Android input. Payment receipts use **Payment** only, without AM notes or memos.
+
+`server/panel/Pricing.php` implements tenant/currency-scoped prices against the signed `/packages` catalogue. The hidden page shows the fixed credit cost beside an editable customer renewal price. It stores a package fingerprint, rejects stale saves, and refuses quotes if cost/term/connection details changed until the reseller reviews them. Bouquet lists do not affect price. A 0.00 customer price does not waive reseller credits. Pricing is implemented; customer ownership/session API and automatically fulfilled customer checkout are still blocked on the current worker contracts.
+
+The older worker source has no idempotency/order reference on `/renew-line`. It can commit the credit debit/expiry and then fail native refresh. A payment webhook retry must never blindly call it twice. Before enabling customer charges, inspect the deployed worker for a usable customer-to-owner lookup and transaction-level renewal idempotency/result-recovery contract. `server/inspect-worker-contract.py` prints AST-only route/model/helper fingerprints without importing config, calling APIs, or exposing credentials. It is run on the worker host, not merely the website host. If it matches the old source, the smallest additive worker extension must bind the AM order ID, reseller debit and service mutation in the same database transaction; preserve existing routes and policies.
+
+The first integrated checkout is each reseller's own Square account, following Hub's hosted-checkout approach. The existing external-link preference remains available for future customer routing.
 
 - External link routing can be implemented without assuming payment completion. An arbitrary checkout URL alone does not supply verified invoice history, credit accounting, or automatic renewal. Those need a documented callback/API or deliberate reconciliation workflow.
 - Integrated checkout must preserve server-owned prices, merchant routing, verified payment state, idempotent renewal, and the distinction between paid and service applied.
@@ -58,4 +64,4 @@ Does **their own billing flow** mean a reseller-configured external HTTPS paymen
 5. Add bouquet writes and selected billing integration with customer credit/history.
 6. Verify isolation with at least two participating resellers, disabled/nonparticipating customers, expired accounts, and ownership changes; smoke-test existing panel routes before and after deployment.
 
-Existing v0.2.1 remains a direct-provider read-only test app. It does not yet enforce reseller participation. No multi-reseller access or billing configuration has been deployed by writing this document.
+Existing v0.2.1 remains a direct-provider read-only test app. It does not yet enforce reseller participation. The hidden reseller preferences and Square setup test are deployed; the user confirmed sandbox verification. Package price mappings are implemented/tested but await deployment. Customer access enforcement and automatic renewal are not live yet.

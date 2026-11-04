@@ -44,7 +44,7 @@ with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR', '/tmp/opencode')) 
     # Upgrade a pre-gateway installation with saved reseller preferences.
     with sqlite3.connect(state / 'settings.sqlite') as db:
         db.execute("INSERT INTO am_reseller_settings VALUES ('7',1,'{}',1)")
-        for table in ('am_square_connections', 'am_square_merchants', 'am_square_tests'):
+        for table in ('am_square_connections', 'am_square_merchants', 'am_square_tests', 'am_package_prices'):
             db.execute('DROP TABLE ' + table)
     (state / 'gateway.key').unlink()
     (site / 'am-app/settings-config.php').write_text("<?php return ['database' => '" + str(state / 'settings.sqlite') + "'];")
@@ -54,11 +54,14 @@ with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR', '/tmp/opencode')) 
     with patch('sys.argv', ['update-panel.py', '--site', str(site), '--php', os.environ.get('PHP', 'php')]), patch.object(updater.os, 'geteuid', return_value=0), patch.object(updater.os, 'chown'):
         updater.update()
         key = (state / 'gateway.key').read_bytes()
+        with sqlite3.connect(state / 'settings.sqlite') as db:
+            db.execute("INSERT INTO am_package_prices VALUES ('7',12,'CAD',1995,1,1,'fixture','{}',1)")
         updater.update()
         assert len(key) == 32 and key == (state / 'gateway.key').read_bytes()
         with sqlite3.connect(state / 'settings.sqlite') as db:
             assert db.execute('SELECT reseller_id,revision FROM am_reseller_settings').fetchall() == [('7', 1)]
             assert db.execute('SELECT COUNT(*) FROM am_square_connections').fetchone()[0] == 0
+            assert db.execute('SELECT reseller_id,amount_minor FROM am_package_prices').fetchall() == [('7', 1995)]
         assert len(list(state.glob('backup-*'))) == 2
         for filename, content in before.items():
             assert Path(filename).read_bytes() == content
