@@ -67,6 +67,28 @@ try {
     (new PricingStore($config['database']))->save('1',['package_id'=>'1','currency'=>'CAD','amount'=>'0','revision'=>'0','fingerprint'=>$catalogue[1]['fingerprint'],'enabled'=>'1'],$catalogue);
     $login=$service->login(['username'=>'customer','password'=>'secret'],'fixture');
     $ctx=$service->session($login['token']); check(count($login['account']['offers'])===1,'Offer available');
+    check($service->account($ctx)['renewal_unavailable_message']===null,'Available offer has no false blocker');
+    foreach ([['allow_renewals',false,'general customer renewal permission'],['billing_mode','none','Integrated billing'],['gateways',[],'Square is not selected']] as [$field,$value,$expected]) {
+        $blocked=$ctx; $blocked['settings'][$field]=$value;
+        $view=$service->account($blocked);
+        check($view['offers']===[] && str_contains($view['renewal_unavailable_message'],$expected),'Specific configuration blocker: '.$field);
+    }
+    $blocked=$ctx; $blocked['line']['max_connections']=1;
+    check(str_contains($service->account($blocked)['renewal_unavailable_message'],'connection limit differs'),'Connection mismatch distinguished from disabled price');
+    $blocked=$ctx; $blocked['line']['package_id']=null;
+    check(str_contains($service->account($blocked)['renewal_unavailable_message'],'No package is assigned'),'Missing assignment explained');
+    $db=new PDO('sqlite:'.$config['database']);
+    $db->exec('UPDATE am_package_prices SET enabled=0');
+    check(str_contains($service->account($ctx)['renewal_unavailable_message'],'disabled for CAD'),'Disabled price explained');
+    $db->exec('UPDATE am_package_prices SET enabled=1,amount_minor=725');
+    $view=$service->account($ctx);
+    check($view['offers']===[] && str_contains($view['renewal_unavailable_message'],'sandbox CAD connection'),'Enabled paid price reports missing matching gateway');
+    $db->exec('UPDATE am_package_prices SET amount_minor=0');
+    $db->exec("UPDATE am_package_prices SET package_fingerprint='stale'");
+    check(str_contains($service->account($ctx)['renewal_unavailable_message'],'review and save the CAD'),'Stale package price explained');
+    $db->prepare('UPDATE am_package_prices SET package_fingerprint=?')->execute([$catalogue[1]['fingerprint']]);
+    check($service->renewalDiagnostic('1','10')['offers']===['CAD'],'Reseller diagnostic uses the same available offers');
+    denied(fn()=>$service->renewalDiagnostic('2','10'),403);
     denied(fn()=>$service->bouquets($ctx,['bouquet_ids'=>[1],'revision'=>str_repeat('a',64)]),403);
     $editable=$ctx; $editable['settings']['allow_bouquets']=true;
     denied(fn()=>$service->bouquets($editable,['bouquet_ids'=>['1'],'revision'=>str_repeat('a',64)]),422);

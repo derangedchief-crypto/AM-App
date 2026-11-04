@@ -202,7 +202,7 @@ final class SquareStore
     public function forCheckout(string $reseller, string $mode, string $currency): array
     {
         $row = $this->one('SELECT id FROM am_square_connections WHERE reseller_id=? AND mode=? AND currency=? AND webhook_cipher IS NOT NULL ORDER BY created_at DESC,rowid DESC LIMIT 1', [$reseller,$mode,$currency]);
-        if (!$row) throw new \InvalidArgumentException('Square checkout is not configured for this currency and environment.');
+        if (!$row) throw new \InvalidArgumentException('Square checkout needs a matching '.$mode.' '.$currency.' connection with its webhook signature key saved.');
         return $this->connection($reseller, $row['id']);
     }
 

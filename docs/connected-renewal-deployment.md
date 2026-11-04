@@ -1,4 +1,4 @@
-# Bouquet editing and connected renewal deployment — 0.3.2
+# Bouquet editing and connected renewal deployment — 0.3.3
 
 This release connects Android → AM PHP customer API → additive signed `/am/*` worker contracts. Customers can edit permitted bouquets for free and renew their current package. Package/connection changes require the reseller. Existing reseller endpoints and Hub remain unchanged.
 
@@ -11,6 +11,14 @@ On the hidden AM page, enable **Add or remove permitted bouquets (free)** under 
 Set **Service display name (shown in the app)** on the AM page to brand the subscription heading, for example Extreme TV. The package remains a separate service detail. Deploy both server updates and the new APK for this release; all public instructions intentionally omit private host IP addresses.
 
 Bouquet saves check server-side ownership, current package permissions, credential revision and selection revision while holding the same reseller/customer locks as renewals. They change only bouquet selection and modification time, never expiry, connections, package or credits. Repeating the same selection repairs a lost reply/native refresh without charges; stale conflicting edits require refresh. Sandbox mode applies to payments only: confirmed bouquet edits are real service changes and are free.
+
+## An enabled package price is not appearing
+
+Version 0.3.3 fixes the generic empty-offer message. Update the website (no worker change from 0.3.2), then open **Check a service's renewal availability** on the hidden AM page. Enter the numeric customer service ID from your reseller panel. The read-only check reports the assigned package ID, connections, checkout mode and exact blocker using the same rules as the customer API. It never creates an invoice, charges a payment or renews a service.
+
+The general **Renew or extend current subscription** permission, billing mode and gateway preferences are saved by **Save AM settings**. Each **Save package price** button saves only that package's price/offer flag. Square must have a matching checkout mode, price currency and saved webhook key. The enabled price must match the service's actual package ID and connection count; a similarly named different duration/connection variant is not the same package. Changed package details require the saved price to be reviewed again. These conditions now have separate messages in both the check and the updated app.
+
+If a check says offers are available, refresh the app to reload settings. If it reports a blocker, resolve the named setting rather than repeatedly changing the price. A successful availability check confirms the offer can be displayed; worker credit balance and a fresh service quote are still checked before checkout.
 
 ## Installation order
 

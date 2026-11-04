@@ -215,7 +215,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                         Label("SIGNED IN AS")
                         Text(account.username, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                         Detail("Account status", account.status.label)
-                        Detail("App version", "0.3.2 · Bouquets & service name")
+                        Detail("App version", "0.3.3 · Renewal availability")
                         Detail("Provider", account.providerName.ifBlank { "Your reseller" })
                         if (account.supportEmail.isNotBlank()) Detail("Reseller support", account.supportEmail)
                         Detail("Login", if (state.remembered) "Remembered on this device" else "Not saved on this device")
@@ -297,7 +297,7 @@ private fun BouquetEditor(account: ServiceAccount, busy: Boolean, message: Strin
 private fun RenewalOptions(account: ServiceAccount, disabled: Boolean, quote: (RenewalOffer) -> Unit) = BoxCard {
     Label("RENEW CURRENT PACKAGE")
     if (account.renewalMode == "sandbox") Hint("Sandbox mode: test payments only; your service will not be renewed.")
-    if (account.offers.isEmpty()) Hint("Your reseller has not enabled an available renewal price for this service. Contact your reseller to renew.")
+    if (account.offers.isEmpty()) Hint(account.renewalUnavailableMessage ?: "No renewal option is currently available. Refresh your account. Your reseller can check the exact reason on the AM management page.")
     account.offers.forEach { offer ->
         Text("${offer.duration} ${offer.period} · ${offer.connections} connection(s)")
         Button(onClick = { quote(offer) }, enabled = !disabled, modifier = Modifier.fillMaxWidth()) { Text("Review renewal · ${offer.price}") }

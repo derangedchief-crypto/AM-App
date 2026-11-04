@@ -127,6 +127,7 @@ internal class ManagedAccountClient(
             maxConnections = line.getInt("max_connections"), activeConnections = null, trial = line.getBoolean("is_trial"),
             packageName = if (line.isNull("package_name")) null else line.getString("package_name"), createdAt = null,
             providerName = json.getString("provider"), supportEmail = json.getString("support_email"),
+            renewalUnavailableMessage = if (json.isNull("renewal_unavailable_message")) null else json.getString("renewal_unavailable_message").take(2000),
             renewalMode = json.getString("renewal_mode").also { require(it in setOf("live", "sandbox")) },
             bouquetRevision = line.optString("bouquet_revision"),
             canEditBouquets = json.optBoolean("allow_bouquets") && line.optString("bouquet_revision").matches(Regex("[a-f0-9]{64}")),

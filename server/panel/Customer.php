@@ -72,9 +72,15 @@ final class CustomerService
     {
         $p = $catalogue[$package] ?? null;
         // Customer checkout is renewal-only, regardless of legacy change permissions.
-        if ($package !== $ctx['line']['package_id'] || ($p && $p['max_connections'] !== $ctx['line']['max_connections'])) throw new CustomerError(403,'Contact your reseller for package or connection changes. AM only renews your current package.');
-        if (!$ctx['settings']['allow_renewals'] || !in_array($ctx['settings']['billing_mode'],['integrated','both'],true)
-            || !in_array('square',$ctx['settings']['gateways'],true) || !$p || (string)$p['package_type'] === '1') throw new CustomerError(403,'This renewal option is not enabled by your provider.');
+        if (empty($ctx['line']['package_id'])) throw new CustomerError(403,'No package is assigned to this service. Contact your reseller to assign the correct package.');
+        if ($package !== $ctx['line']['package_id']) throw new CustomerError(403,'Only your currently assigned package can be renewed. A price for a different package does not enable renewal of this service.');
+        if (!empty($ctx['line']['activated']) && (int)($ctx['line']['expire_at'] ?? -1) === 0) throw new CustomerError(403,'This unlimited service has no expiry date and does not need renewal.');
+        if (!$ctx['settings']['allow_renewals']) throw new CustomerError(403,'The general customer renewal permission is off. Your reseller must enable Renew or extend current subscription and save AM settings.');
+        if (!in_array($ctx['settings']['billing_mode'],['integrated','both'],true)) throw new CustomerError(403,'Integrated billing is not selected. Your reseller must choose Integrated gateway checkout or Both billing methods and save AM settings.');
+        if (!in_array('square',$ctx['settings']['gateways'],true)) throw new CustomerError(403,'Square is not selected in the reseller gateway preferences.');
+        if (!$p) throw new CustomerError(403,'Your assigned package is not currently offered in the reseller catalogue.');
+        if ((string)$p['package_type'] === '1') throw new CustomerError(403,'This service is assigned a trial package. Contact your reseller to move it to a paid package.');
+        if ($p['max_connections'] !== $ctx['line']['max_connections']) throw new CustomerError(403,'Your service connection limit differs from its assigned package. Your reseller must resolve that mismatch before renewal.');
         return $p;
     }
 
@@ -110,17 +116,34 @@ final class CustomerService
     public function account(array $ctx): array
     {
         $line = $ctx['line']; unset($line['line_fingerprint']);
-        $offers = []; $catalogue = $this->catalogue($ctx['reseller']);
-        foreach ($this->prices->rows($ctx['reseller']) as $row) {
+        $offers = []; $reasons = []; $catalogue = $this->catalogue($ctx['reseller']);
+        $rows = array_filter($this->prices->rows($ctx['reseller']),fn($row)=>(int)$row['package_id'] === ($line['package_id'] ?? null));
+        try {
+            $this->authorizeRenewal($ctx,(int)($line['package_id'] ?? 0),$catalogue);
+            if (!$rows) $reasons[] = 'No renewal price is saved for the package assigned to this service. A price for another package or connection variant does not apply.';
+        } catch (CustomerError $error) { $reasons[] = $error->getMessage(); $rows = []; }
+        foreach ($rows as $row) {
             try {
                 $p = $this->authorizeRenewal($ctx,(int)$row['package_id'],$catalogue);
                 $q = $this->prices->quote($ctx['reseller'],(int)$row['package_id'],$row['currency'],$catalogue);
                 if ($q['amount_minor'] > 0) $this->merchants->forCheckout($ctx['reseller'],$ctx['settings']['square_mode'],$row['currency']);
                 $offers[] = ['package_id'=>$p['id'],'name'=>$p['name'],'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],'max_connections'=>$p['max_connections'],'currency'=>$q['currency'],'amount_minor'=>$q['amount_minor']];
-            } catch (CustomerError | \InvalidArgumentException $error) { /* An unavailable price is not a customer offer. */ }
+            } catch (CustomerError | \InvalidArgumentException $error) { $reasons[] = $error->getMessage(); }
         }
         return ['service'=>$line,'provider'=>$ctx['settings']['display_name'],'support_email'=>$ctx['settings']['support_email'],
-                'renewal_mode'=>$ctx['settings']['square_mode'],'allow_bouquets'=>(bool)$ctx['settings']['allow_bouquets'],'offers'=>$offers,'server_time'=>time()];
+                'renewal_mode'=>$ctx['settings']['square_mode'],'allow_bouquets'=>(bool)$ctx['settings']['allow_bouquets'],'offers'=>$offers,
+                'renewal_unavailable_message'=>$offers ? null : implode(' ',array_unique($reasons)),'server_time'=>time()];
+    }
+
+    public function renewalDiagnostic(string $reseller, string $line): array
+    {
+        if (!preg_match('/^[1-9][0-9]{0,17}$/D',$line)) throw new CustomerError(422,'Enter a valid customer service ID.');
+        $ctx = $this->context($reseller,$line);
+        $account = $this->account($ctx);
+        return ['line_id'=>$line,'package_id'=>$ctx['line']['package_id'],'package_name'=>$ctx['line']['package_name'] ?? '',
+            'connections'=>$ctx['line']['max_connections'],'mode'=>$ctx['settings']['square_mode'],
+            'message'=>$account['renewal_unavailable_message'] ?? 'Renewal offers are available. Refresh the app to load the latest saved settings.',
+            'offers'=>array_map(fn($o)=>$o['currency'],$account['offers'])];
     }
 
     public function bouquets(array $ctx, array $input): array

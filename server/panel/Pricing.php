@@ -86,9 +86,10 @@ final class PricingStore
     {
         $p = $catalogue[$packageId] ?? null;
         $row = $this->rows($reseller)[$packageId . ':' . $currency] ?? null;
-        if (!$p || !$row || (int)$row['enabled'] !== 1 || !hash_equals($p['fingerprint'], $row['package_fingerprint'])) {
-            throw new \InvalidArgumentException('This renewal price is unavailable or needs reseller review.');
-        }
+        if (!$p) throw new \InvalidArgumentException('The current package is not available in the reseller catalogue.');
+        if (!$row) throw new \InvalidArgumentException('No renewal price is saved for the current package in '.$currency.'.');
+        if ((int)$row['enabled'] !== 1) throw new \InvalidArgumentException('The current package renewal price is disabled for '.$currency.'.');
+        if (!hash_equals($p['fingerprint'], $row['package_fingerprint'])) throw new \InvalidArgumentException('The package details changed. Your reseller must review and save the '.$currency.' renewal price again.');
         return ['package_id' => $packageId, 'currency' => $currency, 'amount_minor' => (int)$row['amount_minor'],
             'price_revision' => (int)$row['revision'], 'wholesale_credits' => $p['price_credits'], 'package' => $p];
     }

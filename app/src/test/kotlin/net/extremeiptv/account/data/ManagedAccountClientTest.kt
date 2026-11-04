@@ -89,4 +89,16 @@ class ManagedAccountClientTest {
             assertFalse(body.has("reseller_id")); assertFalse(body.has("amount_minor"))
         }
     }
+
+    @Test fun `unavailable renewal preserves specific server explanation`() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); val client=ManagedAccountClient(server.url("/customer-api.php"))
+            val data=JSONObject(account()).put("offers",org.json.JSONArray())
+                .put("renewal_unavailable_message","Square checkout needs a matching sandbox CAD connection with its webhook signature key saved.")
+            server.reply(JSONObject().put("ok",true).put("token","b".repeat(64)).put("account",data).toString())
+            val result=client.readAccount(ServiceCredentials("customer","secret"))
+            assertTrue(result.offers.isEmpty())
+            assertEquals(data.getString("renewal_unavailable_message"),result.renewalUnavailableMessage)
+        }
+    }
 }

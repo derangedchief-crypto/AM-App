@@ -11,8 +11,8 @@ android {
         applicationId = "net.extremeiptv.account"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.3.2-bouquets-branding"
+        versionCode = 8
+        versionName = "0.3.3-renewal-availability"
     }
     buildFeatures { compose = true }
     compileOptions {

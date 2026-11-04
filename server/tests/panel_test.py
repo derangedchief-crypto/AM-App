@@ -22,6 +22,14 @@ function require_login() {
     return $_SESSION['reseller'];
 }
 function call_auth_worker($route, $body) {
+    if ($route === '/am/customer') {
+        if ($body !== ['reseller_id'=>(string)$_SESSION['reseller']['id'],'line_id'=>'10']) return ['ok'=>false];
+        return ['ok'=>true,'reseller_id'=>(string)$_SESSION['reseller']['id'],'auth_revision'=>'fixture','line'=>['line_id'=>'10','package_id'=>(int)$_SESSION['reseller']['id'],'package_name'=>'Fixture package','max_connections'=>2,'expire_at'=>1900000000,'activated'=>true]];
+    }
+    if ($route === '/am/packages') {
+        if ($body['reseller_id'] !== (string)$_SESSION['reseller']['id']) throw new Exception('Wrong scope');
+        return ['ok'=>true,'packages'=>[['id'=>(int)$_SESSION['reseller']['id'],'name'=>'Fixture package','price_credits'=>'3.50','max_connections'=>2,'duration'=>1,'duration_period'=>'months']]];
+    }
     if ($route === '/packages' && $body['username'] === $_SESSION['reseller']['username']) {
         return ['ok' => true, 'packages' => [['id' => (int)$_SESSION['reseller']['id'], 'name' => 'Fixture package', 'price_credits' => '3.50', 'max_connections' => 2, 'duration' => 1, 'duration_period' => 'months']]];
     }
@@ -138,11 +146,17 @@ def run():
                             {'display_name[]': ['bad']}, {'billing_mode': 'integrated'}, {'app_enabled': 'yes'}]:
                 assert request(data={**fields, **invalid})[0] == 422
             assert request(data={**fields, 'display_name': '<script>alert(1)</script>', 'reseller_id': '2',
-                                 'app_enabled': '1', 'billing_mode': 'external', 'billing_url': 'https://billing.example.com/pay'})[0] == 303
+                                 'app_enabled': '1', 'customer_policy': 'all', 'billing_mode': 'external', 'billing_url': 'https://billing.example.com/pay'})[0] == 303
             assert request(data={**fields, 'display_name': 'stale'})[0] == 409
             body = request()[1]
             assert '&lt;script&gt;' in body and '<script>alert' not in body
             assert form()['revision'] == '1'
+            assert request(data={'action':'renewal_diagnostic','line_id':'10'})[0] == 419
+            assert request(data={**form(),'action':'renewal_diagnostic','line_id':'10','reseller_id':'2'})[0] == 303
+            diagnostic_body = request()[1]
+            assert 'general customer renewal permission is off' in diagnostic_body
+            assert 'Service #10' in diagnostic_body and 'Assigned package #1' in diagnostic_body
+            assert request(data={**form(),'action':'renewal_diagnostic','line_id':'11'})[0] == 409
             login('user=2')
             second = form()
             assert second['revision'] == '0'
