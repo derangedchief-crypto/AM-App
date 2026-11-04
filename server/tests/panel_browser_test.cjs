@@ -106,7 +106,7 @@ const assert = require('node:assert/strict');
     await page.locator('details').first().getByRole('button',{name:'Suspend',exact:true}).click();
     await page.goto(process.argv[2]+'/fixture.php?user=1');
     await page.goto(process.argv[2]+'/am-app/');
-    assert.match(await page.locator('main').innerText(),/suspended/);
+    assert.match(await page.locator('main').innerText(),/suspended/i);
     assert.equal(await page.locator('#pricing').count(),0);
     await page.goto(process.argv[2]+'/fixture.php?user=1&admin=1');
     await page.goto(process.argv[2]+'/am-app/licenses-admin.php?reseller=1');
