@@ -2,6 +2,10 @@
 
 ## Reseller licensing and menu links
 
+### Applications menu
+
+Run `python3 server/install-menus.py` on the Website host to add or upgrade the reseller navigation. **Applications** appears immediately below **Sub-resellers**, with **My TV** linking to `/am-app/`. The installer moves the previously installed AM App link into this section, preserves its access restrictions and keeps private backups. Repeated runs do not duplicate the link. The administrator licensing menu retains its existing label. This navigation-only update needs no worker or APK change.
+
 ### Searchable reseller selection
 
 Update the Auth-worker host first with `python3 server/worker/deploy.py`, then the Website host with `python3 server/update-panel.py`. The license page now provides reseller-name dropdowns with live search for issuing keys, filtering licenses and reconciling orders. No numeric ID lookup or APK update is needed. The signed read-only `/am/admin-resellers` route returns only reseller IDs, usernames and enabled status; the website search requires the existing administrator login and denies staff/impersonation sessions. Searches return up to 200 names and ask for a narrower search when more match. Issuance revalidates the selected active account. If the directory is unavailable, update the worker and reload.

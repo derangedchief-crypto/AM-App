@@ -8,7 +8,7 @@ import shutil
 import tempfile
 
 RESELLER_MARKER = '<!-- AM_APP_LICENSED_MENU -->'
-RESELLER_LINK = '''
+LEGACY_RESELLER_LINK = '''
       <!-- AM_APP_LICENSED_MENU -->
       <?php if (empty($_SESSION['portal_staff']) && empty($_SESSION['impersonation'])): ?>
       <a href="<?= e(url('am-app/')) ?>" class="nav-item <?= ($activeNav ?? '') === 'am-app' ? 'active' : '' ?>">
@@ -18,6 +18,18 @@ RESELLER_LINK = '''
       <?php endif; ?>
 '''
 ADMIN_MARKER = '// AM_APP_LICENSE_ADMIN_MENU'
+RESELLER_LINK = '''
+      <!-- AM_APP_LICENSED_MENU -->
+      <?php if (empty($_SESSION['portal_staff']) && empty($_SESSION['impersonation'])): ?>
+      <div role="group" aria-labelledby="am-applications-heading" style="margin:10px 0;padding:10px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+        <div id="am-applications-heading" style="padding:0 12px 8px;font-size:.75rem;font-weight:600;letter-spacing:.06em;color:var(--text-muted)">Applications</div>
+        <a href="<?= e(url('am-app/')) ?>" class="nav-item <?= ($activeNav ?? '') === 'am-app' ? 'active' : '' ?>">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          My TV
+        </a>
+      </div>
+      <?php endif; ?>
+'''
 
 
 def changes(site):
@@ -28,14 +40,26 @@ def changes(site):
             raise RuntimeError('Expected regular portal menu file: ' + name)
         old = path.read_text()
         if name == 'layout_header.php':
+            base = old
             if RESELLER_MARKER in old:
-                if old.count(RESELLER_MARKER) != 1 or "url('am-app/')" not in old:
+                if old.count(RESELLER_MARKER) != 1:
                     raise RuntimeError('AM reseller menu marker changed; review the file.')
-                continue
-            anchor = '<nav class="nav-group">'
-            if old.count(anchor) != 1 or "url('dashboard.php')" not in old:
+                if RESELLER_LINK in old:
+                    base = old.replace(RESELLER_LINK, '', 1)
+                elif LEGACY_RESELLER_LINK in old:
+                    base = old.replace(LEGACY_RESELLER_LINK, '', 1)
+                else:
+                    raise RuntimeError('AM reseller menu content changed; review the file.')
+            anchor = '<a href="<?= e(url(\'sub-resellers.php\')) ?>"'
+            if base.count(anchor) != 1 or "url('dashboard.php')" not in base or "url('am-app/')" in base:
                 raise RuntimeError('Unrecognized reseller menu layout; no files changed.')
-            new = old.replace(anchor, anchor + RESELLER_LINK, 1)
+            end = base.find('</a>', base.index(anchor))
+            if end == -1:
+                raise RuntimeError('Sub-resellers menu link is incomplete; no files changed.')
+            end += len('</a>')
+            new = base[:end] + RESELLER_LINK + base[end:]
+            if new == old:
+                continue
         else:
             if ADMIN_MARKER in old:
                 if old.count(ADMIN_MARKER) != 1 or 'am-app/licenses-admin.php' not in old:
@@ -92,7 +116,7 @@ def install():
     finally:
         for _, _, _, tmp in staged:
             tmp.unlink(missing_ok=True)
-    print('Added AM App and AM App licenses menu links. Private backup: ' + str(backup))
+    print('Installed Applications / My TV and AM App licenses menu links. Private backup: ' + str(backup))
 
 
 if __name__ == '__main__':

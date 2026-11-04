@@ -11,13 +11,20 @@ menus=importlib.util.module_from_spec(spec); spec.loader.exec_module(menus)
 with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
     root=Path(directory)/'web/site'; (root/'includes').mkdir(parents=True)
     header=root/'includes/layout_header.php'; admin=root/'includes/admin_shell.php'
-    header.write_text('KEEP BEFORE\n<nav class="nav-group"><a href="<?= e(url(\'dashboard.php\')) ?>">Dashboard</a></nav>\nKEEP AFTER')
+    header.write_text('KEEP BEFORE\n<nav class="nav-group"><a href="<?= e(url(\'dashboard.php\')) ?>">Dashboard</a><a href="<?= e(url(\'sub-resellers.php\')) ?>">Sub-resellers</a><a href="<?= e(url(\'credits.php\')) ?>">Credits</a></nav>\nKEEP AFTER')
     admin.write_text("<?php function admin_menu(): array {return [\n            ['credit-audit', 'Credit log audit', 'credit-audit.php', 'check'],\n];}")
     original=header.read_text()
     original_admin=admin.read_text()
     pending=menus.changes(root); assert len(pending)==2
     for path,old,new in pending: path.write_text(new)
     assert header.read_text().replace(menus.RESELLER_LINK,'')==original
+    assert menus.changes(root)==[]
+    updated=header.read_text()
+    assert updated.index('Sub-resellers</a>') < updated.index('>Applications</div>') < updated.index('My TV') < updated.index('>Credits</a>')
+    header.write_text(original.replace('<nav class="nav-group">','<nav class="nav-group">'+menus.LEGACY_RESELLER_LINK))
+    pending=menus.changes(root); assert len(pending)==1
+    assert pending[0][2]==updated
+    header.write_text(pending[0][2])
     assert menus.changes(root)==[]
     header.write_text('Unknown local layout')
     try: menus.changes(root)
