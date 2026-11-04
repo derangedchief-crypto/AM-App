@@ -14,10 +14,14 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 internal data class RenewalOffer(val packageId: Int, val name: String, val amount: Long, val currency: String,
-    val duration: Int, val period: String, val connections: Int) {
+    val duration: Int, val period: String, val connections: Int, val promoId: String? = null) {
     val price: String get() = "${BigDecimal.valueOf(amount, 2).toPlainString()} $currency"
 }
-internal data class RenewalQuote(val id: String, val offer: RenewalOffer, val mode: String)
+internal data class RenewalQuote(val id: String, val offer: RenewalOffer, val mode: String, val promoTitle: String? = null)
+internal data class PromotionalDeal(val offer: RenewalOffer, val title: String, val description: String,
+    val bannerUrl: String, val endsAt: Long, val normalAmount: Long) {
+    val normalPrice: String get() = "${BigDecimal.valueOf(normalAmount, 2).toPlainString()} ${offer.currency}"
+}
 internal data class RenewalOrder(val id: String, val name: String, val amount: Long, val currency: String,
     val mode: String, val state: String, val verified: Boolean, val createdAt: Long, val checkoutUrl: String?) {
     val price: String get() = "${BigDecimal.valueOf(amount, 2).toPlainString()} $currency"
@@ -94,12 +98,14 @@ internal class ManagedAccountClient(
         return parse { val rows = reply.getJSONArray("orders"); (0 until rows.length()).map { orderJson(rows.getJSONObject(it)) } }
     }
     override suspend fun quote(offer: RenewalOffer): RenewalQuote {
-        val reply = call("quote", JSONObject().put("package_id", offer.packageId).put("currency", offer.currency))
+        val fields = JSONObject().put("package_id", offer.packageId).put("currency", offer.currency)
+        offer.promoId?.let { fields.put("promo_id", it) }
+        val reply = call("quote", fields)
         return parse {
             val q = reply.getJSONObject("quote")
             RenewalQuote(id(q, "quote_id"), offer.copy(name = q.getString("package_name"), amount = money(q),
                 currency = currency(q), duration = q.getInt("duration"), period = q.getString("duration_period"),
-                connections = q.getInt("max_connections")), mode(q))
+                connections = q.getInt("max_connections")), mode(q), if (q.isNull("promo_title")) null else q.getString("promo_title"))
         }
     }
     override suspend fun checkout(quote: RenewalQuote): RenewalOrder {
@@ -121,6 +127,7 @@ internal class ManagedAccountClient(
         val expiry = line.getLong("expire_at").also { require(it >= 0) }
         val offers = json.getJSONArray("offers")
         val bouquets = line.getJSONArray("bouquets")
+        val deals = json.optJSONArray("deals") ?: JSONArray()
         return ServiceAccount(username = line.getString("username"),
             status = if (expiry > 0 && expiry <= json.getLong("server_time")) ServiceStatus.EXPIRED else ServiceStatus.ACTIVE,
             expiresAt = expiry.takeIf { it > 0 }, unlimited = expiry == 0L && line.getBoolean("activated"),
@@ -135,6 +142,20 @@ internal class ManagedAccountClient(
                 BouquetChoice(it.optInt("id"), it.getString("name"), it.getBoolean("selected"), it.optBoolean("available"))
             },
             bouquets = (0 until bouquets.length()).map { bouquets.getJSONObject(it) }.filter { it.getBoolean("selected") }.map { it.getString("name") },
+            serverTime = json.getLong("server_time"), loadedNanos = System.nanoTime(),
+            deals = (0 until deals.length()).map { i -> deals.getJSONObject(i).let {
+                val packageId = it.getInt("package_id"); require(packageId == line.getInt("package_id"))
+                val promoId = id(it, "promo_id")
+                val banner = it.getString("banner_url").toHttpUrl()
+                require(banner.scheme == endpoint.scheme && banner.host == endpoint.host && banner.port == endpoint.port &&
+                    banner.username.isEmpty() && banner.password.isEmpty() && banner.encodedPath == endpoint.encodedPath.substringBeforeLast('/') + "/promo-banner.php" &&
+                    banner.queryParameter("id") == promoId)
+                val amount = money(it); val normal = it.getLong("normal_amount_minor"); require(normal > amount && normal <= 99999999)
+                val connections = it.getInt("max_connections"); require(connections == line.getInt("max_connections"))
+                PromotionalDeal(RenewalOffer(packageId, it.getString("name"), amount, currency(it), it.getInt("duration"),
+                    it.getString("duration_period"), connections, promoId), it.getString("title"), it.getString("description"),
+                    banner.toString(), it.getLong("ends_at"), normal)
+            } },
             offers = (0 until offers.length()).map { i -> offers.getJSONObject(i).let {
                 val packageId = it.getInt("package_id"); require(packageId == line.getInt("package_id"))
                 RenewalOffer(packageId, it.getString("name"), money(it), currency(it), it.getInt("duration"),

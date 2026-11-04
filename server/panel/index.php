@@ -47,6 +47,23 @@ try {
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         csrf_check();
         $action = $_POST['action'] ?? 'settings';
+        if ($action === 'promotion_save' || $action === 'promotion_disable') {
+            $promotions = new \AmAccount\Promotions($config['database']);
+            if ($action === 'promotion_disable') {
+                if (!is_string($_POST['promo_id'] ?? null) || !is_string($_POST['revision'] ?? null) || !preg_match('/^[0-9]{1,9}$/D',$_POST['revision'])) throw new InvalidArgumentException('Invalid promotion reference.');
+                $promotions->disable($resellerId,$_POST['promo_id'],(int)$_POST['revision']);
+            } else {
+                $image=null; $upload=$_FILES['banner'] ?? null;
+                if ($upload && ($upload['error'] ?? UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_NO_FILE) {
+                    if ($upload['error']!==UPLOAD_ERR_OK || !is_uploaded_file($upload['tmp_name']) || $upload['size']>1048576) throw new InvalidArgumentException('Upload a banner of at most 1 MB.');
+                    $image=\AmAccount\Promotions::image(file_get_contents($upload['tmp_name']));
+                }
+                $catalogue=\AmAccount\PricingStore::catalogue(call_auth_worker('/packages',['username'=>$reseller['username']]));
+                $promotions->save($resellerId,$_POST,$catalogue,$image);
+            }
+            $_SESSION['am_promo_saved']=$resellerId;
+            header('Location: '.url('am-app/#promotions'),true,303); exit;
+        }
         if ($action === 'renewal_diagnostic') {
             if (!is_string($_POST['line_id'] ?? null)) throw new InvalidArgumentException('Invalid customer service ID.');
             $customers = new \AmAccount\CustomerService($config,static fn($path,$body)=>call_auth_worker($path,$body),new \AmAccount\Square());
@@ -129,6 +146,8 @@ unset($_SESSION['am_settings_saved']);
 $squareSaved = ($_SESSION['am_square_saved'] ?? null) === $resellerId;
 unset($_SESSION['am_square_saved']);
 $priceSaved = ($_SESSION['am_price_saved'] ?? null) === $resellerId;
+$promoSaved = ($_SESSION['am_promo_saved'] ?? null) === $resellerId;
+unset($_SESSION['am_promo_saved']);
 unset($_SESSION['am_price_saved']);
 $pricingError = null; $catalogue = []; $prices = [];
 $priceCurrency = $_GET['prices_currency'] ?? $settings['currency'];
@@ -173,7 +192,7 @@ $pricingUrl = url('am-app/?' . http_build_query($viewQuery) . '#pricing');
 $statusLabels = ['enabled'=>'Enabled','disabled'=>'Disabled','unset'=>'Not priced','review'=>'Needs review'];
 $initialSection = isset($_GET['square_return']) ? 'square' : ($saved ? 'settings' : 'pricing');
 if (isset($action) && is_string($action)) $initialSection = match ($action) {
-    'package_price'=>'pricing', 'customer_access'=>'customer-access', 'renewal_diagnostic'=>'renewal-check', 'customer_retry'=>'customer-orders',
+    'promotion_save','promotion_disable'=>'promotions', 'package_price'=>'pricing', 'customer_access'=>'customer-access', 'renewal_diagnostic'=>'renewal-check', 'customer_retry'=>'customer-orders',
     'square_connect','square_webhook','square_checkout','square_refresh'=>'square', default=>'settings'
 };
 ?>
@@ -225,6 +244,7 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 @media(max-width:640px){.am-page .am-grid{grid-template-columns:1fr}.am-page{padding:20px 14px}.am-page .card{padding:18px}}
 @media(max-width:760px){.am-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.am-nav a{overflow-wrap:normal}}
 .am-package summary::after{content:'View details +'}#pricing .am-package summary::after{content:'Edit price +'}.am-package[open] summary::after,#pricing .am-package[open] summary::after{content:'Close −'}.card>.am-package{margin-bottom:10px}
+.am-page input[type=datetime-local],.am-page input[type=file]{box-sizing:border-box;width:100%;min-height:44px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--muted-bg,var(--card));color:var(--text);font:inherit}.am-page input[type=number]{max-width:100%;box-sizing:border-box}
 </style>
 </head><body>
 <main class="am-page">
@@ -232,12 +252,13 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <p class="am-muted">Settings for <?= e((string)($reseller['display_name'] ?? $reseller['username'] ?? 'your reseller account')) ?>.</p></div>
 <a class="btn" href="<?= e(url('dashboard.php')) ?>">Back to reseller panel</a></div>
 <nav class="am-nav" aria-label="AM management sections">
-<?php foreach (['pricing'=>'Packages & prices','settings'=>'App settings','customer-access'=>'Customer access','renewal-check'=>'Renewal check','customer-orders'=>'Orders','square'=>'Square setup'] as $id=>$label): ?><a href="#<?= e($id) ?>" data-am-link="<?= e($id) ?>"><?= e($label) ?></a><?php endforeach; ?>
+<?php foreach (['pricing'=>'Packages & prices','promotions'=>'Promotions','settings'=>'App settings','customer-access'=>'Customer access','renewal-check'=>'Renewal check','customer-orders'=>'Orders','square'=>'Square setup'] as $id=>$label): ?><a href="#<?= e($id) ?>" data-am-link="<?= e($id) ?>"><?= e($label) ?></a><?php endforeach; ?>
 </nav>
 <?php if ($saved): ?><div class="flash success" role="status">Your AM settings were saved for this reseller account.</div><?php endif; ?>
 <?php if ($errorMessage): ?><div class="flash error" role="alert"><?= e($errorMessage) ?></div><?php endif; ?>
 <?php if ($squareSaved): ?><div class="flash success" role="status">Square operation completed. Check the connection and verified test status below.</div><?php endif; ?>
 <?php if ($priceSaved): ?><div class="flash success" role="status">Your customer renewal price was saved. General renewal permission and billing settings are saved separately with Save AM settings.</div><?php endif; ?>
+<?php if ($promoSaved): ?><div class="flash success" role="status">Promotion saved. Only eligible customers see active deals during the sale window.</div><?php endif; ?>
 <?php if (isset($_GET['square_return'])): ?><div class="am-notice">Returned from Square. Use <strong>Check payment with Square</strong> below. Returning here does not confirm payment.</div><?php endif; ?>
 <form id="settings" data-am-section method="post" action="<?= e(url('am-app/#settings')) ?>">
 <?= csrf_field() ?><input type="hidden" name="revision" value="<?= (int)($snapshot['revision'] ?? 0) ?>">
@@ -319,6 +340,7 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <label class="am-field"><span>Customer renewal price · <?= e($priceCurrency) ?></span><input type="number" name="amount" min="0" max="999999.99" step="0.01" required value="<?= $price ? e(number_format((int)$price['amount_minor'] / 100, 2, '.', '')) : '' ?>"></label>
 <label class="am-switch"><input type="checkbox" name="enabled" value="1"<?= am_checked($price && (int)$price['enabled'] === 1) ?>><span>Offer this package for customer renewal</span></label>
 <button class="btn btn-primary" type="submit">Save package price</button>
+<a class="btn" href="<?= e(url('am-app/?promo_package='.$package['id'].'&prices_currency='.$priceCurrency.'#promotions')) ?>">Create deal for this package</a>
 </form></details>
 <?php endforeach; ?></div>
 <nav class="am-pager" aria-label="Package pages">
@@ -327,6 +349,7 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <?php if ($page < $pageCount): ?><a class="btn" href="<?= e(url('am-app/?'.http_build_query(array_merge($viewQuery,['page'=>$page+1])).'#pricing')) ?>">Next →</a><?php endif; ?></nav>
 <?php endif; ?>
 </section>
+<?php require __DIR__.'/promotions-view.php'; ?>
 <section id="customer-orders" data-am-section class="card am-square"><h2>Customer renewal orders</h2>
 <p class="am-muted">Most recent 50 orders for your customers. Retry checks the original payment and renewal ID; it does not create another invoice. If a paid order needs review, check your wholesale credit balance, customer access and package availability before retrying.</p>
 <?php if ($customerOrdersError): ?><p role="alert"><?= e($customerOrdersError) ?></p>

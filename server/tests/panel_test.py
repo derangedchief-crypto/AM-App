@@ -194,6 +194,8 @@ def run():
             assert saved_price[0] == 303, saved_price
             assert 'q=Package+20' in saved_price[2]['Location'] and 'connections=3' in saved_price[2]['Location']
             assert '12.50 USD' in request('/am-app/?price_status=enabled&prices_currency=USD')[1]
+            assert request(data={'action':'promotion_save'})[0] == 419
+            assert request(data={'action':'promotion_disable'})[0] == 419
             assert request('/am-app/?price_status=enabled&prices_currency=USD')[1].count('class="am-package"') == 1
             if os.environ.get('AM_BROWSER_TEST'):
                 subprocess.run(['node',str(SOURCE / 'tests/panel_browser_test.cjs'),f'http://127.0.0.1:{port}'],check=True)

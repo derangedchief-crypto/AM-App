@@ -92,6 +92,9 @@ def run():
             assert request({'action':'account','reseller_id':'2'})[0]==422
             assert request({'action':'quote','package_id':'1','currency':'CAD'})[0]==422
             assert request({'action':'quote','package_id':2,'currency':'CAD'})[0]==403
+            for promo in [None, [], 'invalid', 'a'*32]:
+                assert request({'action':'quote','package_id':1,'currency':'CAD','promo_id':promo})[0]==422
+            assert request({'action':'quote','package_id':1,'currency':'CAD','promo_id':'a'*32,'amount_minor':1})[0]==422
             status,quote=request({'action':'quote','package_id':1,'currency':'CAD'})
             assert status==200,quote
             qid=quote['quote']['quote_id']

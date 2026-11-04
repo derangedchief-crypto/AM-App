@@ -15,6 +15,8 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import kotlinx.coroutines.delay
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -166,13 +168,14 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
     }
     Scaffold(containerColor = Ink, bottomBar = {
         NavigationBar(containerColor = Ink) {
-            listOf("Home", "Services", "Bills", "Account").forEach { item ->
+            listOf("Home", "Services", "Deals", "Bills", "Account").forEach { item ->
                 val selectedTab = when (tab) { "Modify", "Renew" -> "Services"; "Invoice" -> "Bills"; else -> tab }
                 NavigationBarItem(selected = selectedTab == item, onClick = { dismissQuote(); tab = item },
                     icon = { Icon(when (item) {
                         "Home" -> Icons.Default.Home
                         "Services" -> Icons.Default.Settings
                         "Bills" -> Icons.AutoMirrored.Filled.List
+                        "Deals" -> Icons.Default.Star
                         else -> Icons.Default.AccountCircle
                     }, contentDescription = null) }, label = { Text(item) },
                     colors = NavigationBarItemDefaults.colors(indicatorColor = Panel, selectedIconColor = Lime, selectedTextColor = Lime))
@@ -190,6 +193,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                 Heading("A clear picture.\nBefore you confirm.", "Review your renewal and payment details.")
                 BoxCard {
                     Label("RENEWAL SUMMARY")
+                    q.promoTitle?.let { Detail("Promotion", it, accent = true) }
                     Detail("Service", account.serviceDisplayName)
                     Detail("Package", q.offer.name)
                     Detail("Connections", q.offer.connections.toString())
@@ -252,6 +256,34 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                     LiveServiceCard(account)
                     RenewalOptions(account, state.busy || state.stale) { awaitingReview = true; quote(it) }
                     Secondary("Back to service") { tab = "Services" }
+                }
+                "Deals" -> {
+                    Heading("A little less.\nThe same great service.", "Limited-time offers from your reseller.")
+                    val now by produceState(account.serverTime, account.loadedNanos) {
+                        while (true) {
+                            value = account.serverTime + (System.nanoTime() - account.loadedNanos) / 1_000_000_000L
+                            delay(1000)
+                        }
+                    }
+                    val deals = account.deals.filter { it.endsAt > now }
+                    if (deals.isEmpty()) BoxCard { Hint("No active deals for your current package. Check back for your reseller's next offer.") }
+                    deals.forEach { deal -> key(deal.offer.promoId) {
+                        BoxCard {
+                            DealBanner(deal.bannerUrl, deal.title)
+                            Text(deal.title, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            if (deal.description.isNotBlank()) Hint(deal.description)
+                            Detail("Package", deal.offer.name)
+                            Detail("Renewal", "${deal.offer.duration} ${deal.offer.period} · ${deal.offer.connections} connections")
+                            Detail("Normal price", deal.normalPrice)
+                            Detail("Deal price", deal.offer.price, accent = true)
+                            Hint("Ends ${dateTimeText(deal.endsAt * 1000)} · ${ZoneId.systemDefault().id}. Future renewals use normal pricing.")
+                            if (account.renewalMode == "sandbox") Hint("Sandbox: test payment only, no service renewal.")
+                            Button(onClick = { awaitingReview = true; quote(deal.offer) }, enabled = !state.busy && !state.stale,
+                                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) {
+                                Text("Review deal · ${deal.offer.price}")
+                            }
+                        }
+                    } }
                 }
                 "Bills" -> {
                     Heading("Your bills,\nall in one place.", "A clear record of payments and renewals.")

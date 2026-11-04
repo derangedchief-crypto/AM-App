@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace AmAccount;
+require_once __DIR__.'/Promotions.php';
 
 /** Customer money prices are independent of the worker's wholesale credits. */
 final class PricingStore
@@ -16,6 +17,7 @@ final class PricingStore
 
     public static function migrate(string $path): void
     {
+        Promotions::migrate($path);
         if (!is_file($path)) throw new \RuntimeException('Settings database is not installed.');
         $db = new \PDO('sqlite:' . $path, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
         $db->exec('CREATE TABLE IF NOT EXISTS am_package_prices (reseller_id TEXT NOT NULL, package_id INTEGER NOT NULL, currency TEXT NOT NULL, amount_minor INTEGER NOT NULL, enabled INTEGER NOT NULL, revision INTEGER NOT NULL, package_fingerprint TEXT NOT NULL, package_snapshot TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(reseller_id,package_id,currency))');

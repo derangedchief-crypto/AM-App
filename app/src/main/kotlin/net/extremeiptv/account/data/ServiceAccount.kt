@@ -31,6 +31,9 @@ internal data class ServiceAccount(
     val bouquetRevision: String = "",
     val canEditBouquets: Boolean = false,
     val renewalUnavailableMessage: String? = null,
+    val deals: List<PromotionalDeal> = emptyList(),
+    val serverTime: Long = 0,
+    val loadedNanos: Long = System.nanoTime(),
 ) {
     val serviceDisplayName: String get() = providerName.trim().ifBlank { packageName?.takeIf { it.isNotBlank() } ?: "Your subscription" }
 }

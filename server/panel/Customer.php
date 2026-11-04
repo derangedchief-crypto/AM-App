@@ -15,6 +15,7 @@ final class CustomerService
     private SquareStore $merchants;
     private SettingsStore $settings;
     private PricingStore $prices;
+    private Promotions $promotions;
 
     public function __construct(private array $config, private \Closure $transport, private Square $square)
     {
@@ -26,6 +27,7 @@ final class CustomerService
         $this->merchants = new SquareStore($config, $square);
         $this->settings = new SettingsStore($config['database']);
         $this->prices = new PricingStore($config['database']);
+        $this->promotions = new Promotions($config['database']);
     }
 
     public static function migrate(string $path): void
@@ -130,7 +132,21 @@ final class CustomerService
                 $offers[] = ['package_id'=>$p['id'],'name'=>$p['name'],'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],'max_connections'=>$p['max_connections'],'currency'=>$q['currency'],'amount_minor'=>$q['amount_minor']];
             } catch (CustomerError | \InvalidArgumentException $error) { $reasons[] = $error->getMessage(); }
         }
-        return ['service'=>$line,'provider'=>$ctx['settings']['display_name'],'support_email'=>$ctx['settings']['support_email'],
+        $deals=[];
+        foreach ($this->promotions->rows($ctx['reseller']) as $promo) {
+            if ((int)$promo['package_id'] !== ($line['package_id'] ?? null)) continue;
+            try {
+                $p=$this->authorizeRenewal($ctx,(int)$promo['package_id'],$catalogue);
+                $base=$this->prices->quote($ctx['reseller'],$p['id'],$promo['currency'],$catalogue);
+                $deal=$this->promotions->price($ctx['reseller'],$promo['id'],$base);
+                if ((int)$deal['amount_minor']>0) $this->merchants->forCheckout($ctx['reseller'],$ctx['settings']['square_mode'],$deal['currency']);
+                $deals[]=['promo_id'=>$deal['id'],'title'=>$deal['title'],'description'=>$deal['description'],
+                    'banner_url'=>$this->config['public_url'].'/promo-banner.php?id='.$deal['id'],'ends_at'=>(int)$deal['ends'],
+                    'package_id'=>$p['id'],'name'=>$p['name'],'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],
+                    'max_connections'=>$p['max_connections'],'currency'=>$deal['currency'],'amount_minor'=>(int)$deal['amount_minor'],'normal_amount_minor'=>$base['amount_minor']];
+            } catch (CustomerError | \InvalidArgumentException $e) { /* Only eligible, currently redeemable promotions are customer-facing. */ }
+        }
+        return ['service'=>$line,'provider'=>$ctx['settings']['display_name'],'support_email'=>$ctx['settings']['support_email'],'deals'=>$deals,
                 'renewal_mode'=>$ctx['settings']['square_mode'],'allow_bouquets'=>(bool)$ctx['settings']['allow_bouquets'],'offers'=>$offers,
                 'renewal_unavailable_message'=>$offers ? null : implode(' ',array_unique($reasons)),'server_time'=>time()];
     }
@@ -159,11 +175,13 @@ final class CustomerService
         return ['account'=>$this->account($fresh),'refresh_pending'=>(bool)($r['refresh_pending'] ?? true)];
     }
 
-    public function quote(array $ctx, int $package, string $currency): array
+    public function quote(array $ctx, int $package, string $currency, ?string $promoId=null): array
     {
         if (!in_array($currency,['CAD','USD'],true)) throw new CustomerError(422,'Invalid currency.');
         $catalogue = $this->catalogue($ctx['reseller']); $p = $this->authorizeRenewal($ctx,$package,$catalogue);
         $price = $this->prices->quote($ctx['reseller'],$package,$currency,$catalogue);
+        $promo=$promoId!==null ? $this->promotions->price($ctx['reseller'],$promoId,$price) : null;
+        if ($promo) $price['amount_minor']=(int)$promo['amount_minor'];
         $q = $this->worker('/am/renew-quote',['reseller_id'=>$ctx['reseller'],'line_id'=>$ctx['line']['line_id'],'package_id'=>$package]);
         $quoted = PricingStore::catalogue(['ok'=>true,'packages'=>[$q['package']]])[$package] ?? null;
         if (!$quoted || $quoted['fingerprint'] !== $p['fingerprint']) throw new CustomerError(409,'Package changed. Refresh renewal options.');
@@ -173,8 +191,14 @@ final class CustomerService
         $request = ['reseller_id'=>$ctx['reseller'],'line_id'=>$ctx['line']['line_id'],'package_id'=>$package,
                     'line_fingerprint'=>$q['line_fingerprint'],'package_fingerprint'=>$q['package']['worker_fingerprint']];
         $this->query('DELETE FROM am_customer_quotes WHERE expires<?',[time()-86400]);
-        $this->query('INSERT INTO am_customer_quotes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',[$id,$ctx['reseller'],$ctx['line']['line_id'],$ctx['auth_revision'],$package,$currency,$price['amount_minor'],$price['price_revision'],$c['id'] ?? null,$mode,json_encode($request,JSON_THROW_ON_ERROR),$p['name'],time()+900]);
-        return ['quote_id'=>$id,'package_name'=>$p['name'],'amount_minor'=>$price['amount_minor'],'currency'=>$currency,'mode'=>$mode,'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],'max_connections'=>$p['max_connections'],'receipt_label'=>'Payment'];
+        $this->query('DELETE FROM am_promo_quotes WHERE quote_id NOT IN (SELECT id FROM am_customer_quotes)');
+        $this->db->beginTransaction();
+        try {
+            $this->query('INSERT INTO am_customer_quotes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',[$id,$ctx['reseller'],$ctx['line']['line_id'],$ctx['auth_revision'],$package,$currency,$price['amount_minor'],$price['price_revision'],$c['id'] ?? null,$mode,json_encode($request,JSON_THROW_ON_ERROR),$p['name'],min(time()+900,(int)($promo['ends'] ?? PHP_INT_MAX))]);
+            if ($promo) $this->query('INSERT INTO am_promo_quotes VALUES (?,?,?)',[$id,$promo['id'],$promo['revision']]);
+            $this->db->commit();
+        } catch (\Throwable $e) { if ($this->db->inTransaction()) $this->db->rollBack(); throw $e; }
+        return ['quote_id'=>$id,'package_name'=>$p['name'],'amount_minor'=>$price['amount_minor'],'currency'=>$currency,'mode'=>$mode,'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],'max_connections'=>$p['max_connections'],'receipt_label'=>'Payment','promo_title'=>$promo['title'] ?? null];
     }
 
     private function order(string $reseller, string $line, string $id): array
@@ -197,6 +221,12 @@ final class CustomerService
         $check = $this->worker('/am/renew-quote',['reseller_id'=>$ctx['reseller'],'line_id'=>$ctx['line']['line_id'],'package_id'=>(int)$q['package_id']]);
         $request = json_decode($q['worker_request'],true,32,JSON_THROW_ON_ERROR);
         if ($check['line_fingerprint'] !== $request['line_fingerprint'] || $check['package']['worker_fingerprint'] !== $request['package_fingerprint']) throw new CustomerError(409,'Service changed. Request a new quote.');
+        if ((int)$q['expires']<=time()) throw new CustomerError(409,'Quote expired. Refresh renewal options.');
+        $promoQuote=$this->one('SELECT * FROM am_promo_quotes WHERE quote_id=?',[$q['id']]);
+        if ($promoQuote) {
+            $promo=$this->promotions->price($ctx['reseller'],$promoQuote['promo_id'],$price);
+            if ((int)$promo['revision']!==(int)$promoQuote['promo_revision'] || (int)$promo['amount_minor']!==(int)$q['amount_minor']) throw new CustomerError(409,'Deal changed. Request a new quote.');
+        } elseif ($price['amount_minor']!==(int)$q['amount_minor']) throw new CustomerError(409,'Price changed. Request a new quote.');
         $id = bin2hex(random_bytes(16)); $request['order_id'] = $id;
         $this->query('INSERT OR IGNORE INTO am_customer_orders (id,quote_id,reseller_id,line_id,auth_revision,package_id,currency,amount_minor,connection_id,mode,worker_request,package_name,state,active_line,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
             [$id,$q['id'],$q['reseller_id'],$q['line_id'],$q['auth_revision'],$q['package_id'],$q['currency'],$q['amount_minor'],$q['connection_id'],$q['mode'],json_encode($request,JSON_THROW_ON_ERROR),$q['package_name'],'creating',$q['reseller_id'].':'.$q['line_id'],time(),time()]);

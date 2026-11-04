@@ -1,4 +1,14 @@
-# Bouquet editing and connected renewal deployment — 0.3.3
+# Bouquet editing, renewals and promotions — 0.4.0
+
+## Limited-time promotions
+
+Update the Website host with `python3 server/update-panel.py` before installing the 0.4.0 APK. This adds promotion tables and banner endpoints while preserving settings, encrypted merchant credentials and existing orders. No worker change is required from 0.3.2 or later. Back up the private SQLite database and gateway key together; promotional banner bytes live in that database, not in Git or a public uploads directory.
+
+In **Packages & prices**, save an enabled normal retail price, expand the desired package and select **Create deal for this package**. Enter a title, description, lower promotional price and matching currency. Upload a PNG, JPEG or WebP banner (at most 1 MB and 4000 × 4000 pixels; recommended 1200 × 600). Set start/end dates in UTC, enable publication and save. **Promotions** provides a management preview, editing, disabling and paginated history. The banner endpoint is a public marketing image addressed by a random ID; it exposes no reseller credentials or customer information. There is no public customer deals webpage.
+
+Customers see only active, currently redeemable deals matching their assigned package and connections. Renewal permission, billing setup, normal-price enablement, catalogue fingerprint and matching Square setup still apply. Deals disappear at their end time using server time plus monotonic elapsed time in the app. Refresh retrieves newly published deals. Multiple deals may coexist; the customer explicitly selects one. A normal renewal does not automatically select a promotion.
+
+The sale window limits new checkout, not future renewal rates. Discounted quotes expire at the earlier of 15 minutes or promotion end; changes to the promotion, normal price, package or merchant invalidate checkout. An order already created retains its price and can complete after the sale ends or is disabled. Retrying checkout or payment uses that same order. Future ordinary renewals use the normal price. Reseller wholesale credits remain the package's fixed cost; package/connection changes remain reseller-managed. Sandbox promotions never renew services. Square receipt item text remains **Payment**.
 
 ## Management layout update
 

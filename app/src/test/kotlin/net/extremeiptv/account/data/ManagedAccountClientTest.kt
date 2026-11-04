@@ -8,6 +8,30 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ManagedAccountClientTest {
+    @Test fun `deals use owned banners and send only promo reference for server pricing`() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); val client = ManagedAccountClient(server.url("/customer-api.php"))
+            val promo = JSONObject(offer).put("promo_id", "d".repeat(32)).put("title", "Weekend deal")
+                .put("description", "Limited time").put("banner_url", server.url("/promo-banner.php?id=" + "d".repeat(32)).toString())
+                .put("ends_at", 1800000600).put("normal_amount_minor", 1000)
+            val data = JSONObject(account()).put("deals", org.json.JSONArray().put(promo))
+            server.reply(JSONObject().put("ok",true).put("token","b".repeat(64)).put("account",data).toString())
+            val result = client.readAccount(ServiceCredentials("customer","secret")); server.takeRequest()
+            assertEquals("10.00 CAD", result.deals.single().normalPrice)
+            assertEquals(1800000000L, result.serverTime)
+            server.reply("""{"ok":true,"quote":{"quote_id":"${"c".repeat(32)}","package_name":"Monthly","amount_minor":600,"currency":"CAD","mode":"live","duration":30,"duration_period":"days","max_connections":2,"promo_title":"Weekend deal"}}""")
+            val quote = client.quote(result.deals.single().offer)
+            val body = JSONObject(server.takeRequest().body.readUtf8())
+            assertEquals("d".repeat(32), body.getString("promo_id"))
+            assertFalse(body.has("amount_minor")); assertFalse(body.has("reseller_id"))
+            assertEquals("6.00 CAD", quote.offer.price)
+            assertEquals("Weekend deal", quote.promoTitle)
+            promo.put("banner_url", "https://untrusted.example/banner.png")
+            server.reply(JSONObject().put("ok",true).put("account",data).toString())
+            try { client.readAccount(ServiceCredentials("customer","secret")); fail("Foreign banner accepted") }
+            catch (e: AccountFailure) { assertEquals(FailureKind.INVALID_RESPONSE, e.kind) }
+        }
+    }
     private val offer = """{"package_id":1,"name":"Monthly","amount_minor":725,"currency":"CAD","duration":30,"duration_period":"days","max_connections":2}"""
     private fun account() = """{"service":{"username":"customer","package_id":1,"package_name":"Monthly","expire_at":1900000000,"activated":true,"max_connections":2,"is_trial":false,"bouquets":[{"name":"News","selected":true},{"name":"Sports","selected":false}]},"provider":"Reseller","support_email":"support@example.com","renewal_mode":"live","offers":[$offer],"server_time":1800000000}"""
     private fun order(url: String = "https://square.link/test", state: String = "pending") = """{"ok":true,"order":{"id":"${"a".repeat(32)}","package_name":"Monthly","amount_minor":725,"currency":"CAD","mode":"live","state":"$state","payment_verified":false,"created_at":1800000000,"checkout_url":"$url"}}"""
