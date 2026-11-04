@@ -64,7 +64,10 @@ def run():
         db = root / 'settings.sqlite'
         subprocess.run([PHP, '-r', 'require $argv[1]; \\AmAccount\\SettingsStore::initialize($argv[2]);',
                         str(root / 'am-app/Settings.php'), str(db)], check=True)
-        (root / 'am-app/settings-config.php').write_text("<?php return ['database' => " + repr(str(db)) + "];")
+        subprocess.run([PHP, '-r', 'require $argv[1]; \\AmAccount\\SquareStore::migrate($argv[2]);',
+                        str(root / 'am-app/Square.php'), str(db)], check=True)
+        (root / 'gateway.key').write_bytes(os.urandom(32))
+        (root / 'am-app/settings-config.php').write_text("<?php return ['database' => " + repr(str(db)) + ", 'secret_key' => " + repr(str(root / 'gateway.key')) + ", 'public_url' => 'https://panel.example.com/am-app'];")
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
             port = sock.getsockname()[1]
@@ -106,6 +109,12 @@ def run():
             assert request()[0] == 503
             login('user=1')
             fields = form()
+            assert request(data={'action': 'square_connect'})[0] == 419
+            assert request(data={**fields, 'action': 'square_connect', 'mode': 'sandbox', 'token': 'invalid', 'location': 'loc1'})[0] == 422
+            assert request(data={**fields, 'action': 'square_webhook', 'connection': 'other-reseller', 'webhook_key': 'fake-secret-key123456'})[0] == 422
+            assert request(data={**fields, 'action': 'square_checkout', 'connection': 'other-reseller'})[0] == 422
+            assert request('/am-app/square-webhook.php')[0] == 405
+            assert request('/am-app/square-webhook.php?connection=' + 'a' * 32, data={})[0] == 400
             assert request(data={'revision': '0'})[0] == 419
             assert request(data={**fields, 'csrf': 'wrong'})[0] == 419
             for url in ['http://example.com', 'https://user:password@example.com', 'https://127.0.0.1',

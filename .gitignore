@@ -15,6 +15,7 @@ keystore.properties
 *.aab
 __pycache__/
 server/panel/settings-config.php
+gateway.key
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal

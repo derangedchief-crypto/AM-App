@@ -5,6 +5,7 @@ from pathlib import Path
 import pwd
 import tempfile
 import subprocess
+import sqlite3
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('installer', Path(__file__).resolve().parents[1] / 'install-panel.py')
@@ -40,4 +41,26 @@ with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR', '/tmp/opencode')) 
         else:
             raise AssertionError('Reinstall must refuse existing state')
         assert (state / 'settings.sqlite').exists()
+    # Upgrade a pre-gateway installation with saved reseller preferences.
+    with sqlite3.connect(state / 'settings.sqlite') as db:
+        db.execute("INSERT INTO am_reseller_settings VALUES ('7',1,'{}',1)")
+        for table in ('am_square_connections', 'am_square_merchants', 'am_square_tests'):
+            db.execute('DROP TABLE ' + table)
+    (state / 'gateway.key').unlink()
+    (site / 'am-app/settings-config.php').write_text("<?php return ['database' => '" + str(state / 'settings.sqlite') + "'];")
+    update_spec = importlib.util.spec_from_file_location('updater', Path(__file__).resolve().parents[1] / 'update-panel.py')
+    updater = importlib.util.module_from_spec(update_spec)
+    update_spec.loader.exec_module(updater)
+    with patch('sys.argv', ['update-panel.py', '--site', str(site), '--php', os.environ.get('PHP', 'php')]), patch.object(updater.os, 'geteuid', return_value=0), patch.object(updater.os, 'chown'):
+        updater.update()
+        key = (state / 'gateway.key').read_bytes()
+        updater.update()
+        assert len(key) == 32 and key == (state / 'gateway.key').read_bytes()
+        with sqlite3.connect(state / 'settings.sqlite') as db:
+            assert db.execute('SELECT reseller_id,revision FROM am_reseller_settings').fetchall() == [('7', 1)]
+            assert db.execute('SELECT COUNT(*) FROM am_square_connections').fetchone()[0] == 0
+        assert len(list(state.glob('backup-*'))) == 2
+        for filename, content in before.items():
+            assert Path(filename).read_bytes() == content
+        print('PASS: legacy upgrade, SQLite backup, repeated update preserves settings/key, existing portal files unchanged.')
 print('PASS: isolated install, original files preserved, private permissions, inherited paths, overwrite refusal. Root ownership mocked; aaPanel PHP-FPM acceptance remains live-host verification.')

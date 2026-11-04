@@ -4,7 +4,7 @@
 
 The additive `panel/` module installs at **https://fecxbrfzku.net/am-app/**. There is no navigation entry. It uses the existing reseller login and CSRF implementation, rechecks enabled status with `/panel-user-balance`, and denies staff/impersonated sessions. Settings and audit revisions use a separate SQLite database scoped to the authenticated reseller ID.
 
-**Current release saves preferences only.** Customer API access, individual customer approvals, live package/bouquet data, merchant credentials, payments, invoices, credits, renewals, and service writes are not connected. Gateway selections are setup preferences. Existing Android v0.2.1 does not yet enforce these preferences.
+**Customer controls still save preferences only.** Square now supports encrypted merchant setup and isolated hosted-checkout tests, using Hub's verification flow. See [`docs/square-setup.md`](../docs/square-setup.md). Customer API access, individual approvals, live package/bouquet data, customer invoices/credits, renewals, and service writes are not connected. Existing Android v0.2.1 does not yet enforce these preferences.
 
 ### aaPanel install
 
@@ -13,6 +13,7 @@ Download a pinned AM-App source archive, extract it, and run `python3 server/ins
 - Existing website: `/www/wwwroot/fecxbrfzku.net`
 - New hidden directory: `/www/wwwroot/fecxbrfzku.net/am-app`
 - New private state: `/www/am-app-state/fecxbrfzku.net/settings.sqlite`
+- Private gateway encryption key: `/www/am-app-state/fecxbrfzku.net/gateway.key`
 - PHP: `/www/server/php/84/bin/php`; PHP worker user: `www`
 
 Override with `--site`, `--state`, `--php`, or `--web-user` if needed. The installer validates PHP syntax/SQLite, refuses existing destinations/state, generates configuration automatically, and applies private permissions. It does not read or copy worker secrets, alter existing portal files, or restart services. The generated module-local `.user.ini` preserves inherited `open_basedir` paths and adds the private database directory. Pool/admin-level restrictions cannot be expanded this way; if the page reports storage unavailable, inspect the PHP-FPM error log/configuration before changing any host-wide setting. Newly inherited INI settings may be cached by PHP-FPM for up to five minutes.
@@ -21,16 +22,19 @@ Installer PHP commands use `-n` to bypass the host's CLI INI and third-party sta
 
 After installation, sign into the existing reseller website, open `/am-app/`, save a preference, and reload to verify persistence. Check dashboard and manage-lines still load. Test a second reseller to confirm separate defaults/settings. Signed-out access should redirect to the existing login. The local suite uses synthetic portal contracts; the real site's PHP-FPM ownership, session cookie scope, worker enabled-state response, and inherited restrictions still require this live smoke test.
 
-To disable the page, move only the new `am-app` directory outside the webroot. Retain the private database for future migration. The installer deliberately does not overwrite an installation; updates need a separate migration/update procedure.
+For an existing installation run `python3 server/update-panel.py` from the downloaded source archive instead. It backs up and migrates the existing AM database while preserving preferences and keys. It does not modify the reseller portal or restart services. Both commands accept `--public-url` for the module's fixed HTTPS address; it is used for Square return/webhook URLs. See the Square setup guide for details.
+
+To disable the page, move only the new `am-app` directory outside the webroot. This also disables its Square webhook endpoint. Retain the private database **and gateway key** together for recovery. The initial installer deliberately refuses overwriting an installation.
 
 ### Local checks
 
 ```sh
 PHP=/path/to/php python3 server/tests/panel_test.py
 PHP=/path/to/php python3 server/tests/installer_test.py
+/path/to/php server/tests/square_test.php
 ```
 
-Use PHP 8.1+ with PDO SQLite and sessions. Installer tests mock root/chown only; all file/database work is real. Browser checks use the existing portal stylesheet at desktop/mobile sizes in light/dark mode. No tests contact live customers, payments, or the shared worker.
+Use PHP 8.1+ with PDO SQLite, sessions, OpenSSL and cURL. Installer/updater tests mock root/chown only; all file/database work is real. Browser checks include the actual site's Pirate's Fortune theme and saved light/dark preference at desktop/mobile sizes. No tests contact live customers, payments, or the shared worker.
 
 ## Customer API architecture
 

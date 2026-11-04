@@ -27,7 +27,7 @@ Universal Android customer account-management app for participating resellers an
 
 Use the owner's `derangedchief-crypto/Reseller-website` as the reference for package, bouquet, renewal, and connection-management functions. AM owns its copies/implementations; the reseller site and existing workers remain separate. See [`docs/reseller-worker-reference.md`](docs/reseller-worker-reference.md) for traced endpoints, known schema, and remaining deployment inputs. The live APK shows a bouquet setup-pending state until this backend is connected; category mapping is no longer needed.
 
-The owner approved reusing the existing reseller worker through a separate AM customer API hosted alongside the reseller website, and adding a hidden reseller-facing AM App control page at `/am-app/`. The settings-only page and automatic aaPanel installer are implemented in [`server/`](server/README.md); live installation is pending. Customer APIs and financial/service actions remain unconnected. See [`docs/multi-reseller-integration.md`](docs/multi-reseller-integration.md) for the architecture.
+The hidden reseller management page at `/am-app/` is installed and saving preferences. [`server/`](server/README.md) now includes an updater, a site-theme fix, and Square merchant setup/hosted-checkout tests following Hub's flow; deployment of that update is pending. See [`docs/square-setup.md`](docs/square-setup.md) for private credential setup and payment verification. Customer APIs, subscription billing and service changes remain unconnected. See [`docs/multi-reseller-integration.md`](docs/multi-reseller-integration.md) for the architecture.
 
 ## Billing reference for future integration
 
