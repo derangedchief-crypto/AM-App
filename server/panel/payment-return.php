@@ -5,5 +5,5 @@ header('Referrer-Policy: no-referrer');
 header('X-Robots-Tag: noindex, nofollow');
 ?>
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Return to AM Account</title>
-<style>body{font:16px system-ui,sans-serif;background:#101821;color:#eef4f7;margin:0;padding:32px}main{max-width:540px;margin:40px auto;padding:24px;background:#1a2733;border-radius:16px}p{line-height:1.6}</style></head>
-<body><main><h1>Return to AM Account</h1><p>Close this checkout tab and return to the app. Select <strong>Check payment / renewal</strong> on your order.</p><p>The app checks payment and service status with the server. Returning here alone does not confirm payment. Keep the same order if it is processing.</p></main></body></html>
+<?php require __DIR__.'/management-style.php'; ?><style>.am-page{max-width:540px;margin:10vh auto;padding:24px}.am-page .am-brand{margin-bottom:28px}</style></head>
+<body><main class="am-page"><section class="card"><div class="am-brand"><span class="am-logo">AM</span><span><strong>My TV</strong><small>Secure checkout</small></span></div><h1>Return to the app</h1><p>Close this tab and select <strong>Check payment / renewal</strong> on your order.</p><p class="am-muted">The app will verify your payment and renewal. If it is still processing, keep the same order.</p></section></main></body></html>

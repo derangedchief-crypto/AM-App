@@ -179,6 +179,7 @@ foreach ($catalogue as $p) {
     $termOptions[$term] = $term;
 }
 natsort($connectionOptions); natsort($termOptions);
+$hasPricingQuery = $viewQuery !== [];
 $query = trim($viewQuery['q'] ?? '');
 $connectionFilter = $viewQuery['connections'] ?? '';
 $termFilter = $viewQuery['term'] ?? '';
@@ -200,30 +201,17 @@ $visiblePackages = array_slice($filteredPackages,($page-1)*12,12);
 $viewQuery['page'] = $page; $viewQuery['prices_currency'] = $priceCurrency;
 $pricingUrl = url('am-app/?' . http_build_query($viewQuery) . '#pricing');
 $statusLabels = ['enabled'=>'Enabled','disabled'=>'Disabled','unset'=>'Not priced','review'=>'Needs review'];
-$initialSection = isset($_GET['square_return']) ? 'square' : ($saved ? 'settings' : 'pricing');
+$initialSection = isset($_GET['square_return']) ? 'square' : ($saved ? 'settings' : ($hasPricingQuery ? 'pricing' : 'overview'));
 if (isset($action) && is_string($action)) $initialSection = match ($action) {
     'promotion_save','promotion_disable'=>'promotions', 'package_name','package_price'=>'pricing', 'customer_access'=>'customer-access', 'renewal_diagnostic'=>'renewal-check', 'customer_retry'=>'customer-orders',
     'square_connect','square_webhook','square_checkout','square_refresh'=>'square', default=>'settings'
 };
 ?>
 <!doctype html>
-<html lang="en"<?= theme_html_attrs() ?>>
+<html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><title>AM App management</title>
-<link rel="stylesheet" href="<?= e(url('assets/css/style.css')) ?>">
-<?= theme_head() ?>
-<script>
-(function () {
-    try {
-        var theme = localStorage.getItem('erp-theme');
-        if (theme !== 'dark' && theme !== 'light') {
-            theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        document.documentElement.setAttribute('data-theme', theme);
-    } catch (error) {}
-})();
-</script>
+<meta name="robots" content="noindex,nofollow"><meta name="color-scheme" content="dark"><title>My TV · Management</title>
 <style>
 .am-page{max-width:1200px;margin:0 auto;padding:32px 20px 64px;color:var(--text)}
 .am-top{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:26px;padding:24px;background:var(--card);border:1px solid var(--border);border-radius:12px}
@@ -256,36 +244,35 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 .am-package summary::after{content:'View details +'}#pricing .am-package summary::after{content:'Edit price +'}.am-package[open] summary::after,#pricing .am-package[open] summary::after{content:'Close −'}.card>.am-package{margin-bottom:10px}
 .am-page input[type=datetime-local],.am-page input[type=file]{box-sizing:border-box;width:100%;min-height:44px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--muted-bg,var(--card));color:var(--text);font:inherit}.am-page input[type=number]{max-width:100%;box-sizing:border-box}
 </style>
-</head><body>
+<?php require __DIR__.'/management-style.php'; ?>
+</head><body class="am-management">
 <main class="am-page">
-<div class="am-top"><div><div class="am-status">Licensed reseller access<?= $licenseRow['expires']!==null ? ' · expires '.e(gmdate('Y-m-d H:i',(int)$licenseRow['expires'])).' UTC' : ' · no expiry' ?></div><h1>AM App management</h1>
-<p class="am-muted">Settings for <?= e((string)($reseller['display_name'] ?? $reseller['username'] ?? 'your reseller account')) ?>.</p></div>
-<a class="btn" href="<?= e(url('dashboard.php')) ?>">Back to reseller panel</a></div>
-<nav class="am-nav" aria-label="AM management sections">
-<?php foreach (['pricing'=>'Packages & prices','promotions'=>'Promotions','settings'=>'App settings','customer-access'=>'Customer access','renewal-check'=>'Renewal check','customer-orders'=>'Orders','square'=>'Square setup'] as $id=>$label): ?><a href="#<?= e($id) ?>" data-am-link="<?= e($id) ?>"><?= e($label) ?></a><?php endforeach; ?>
-</nav>
-<?php if ($saved): ?><div class="flash success" role="status">Your AM settings were saved for this reseller account.</div><?php endif; ?>
+<header class="am-top"><a class="am-brand" href="<?= e(url('am-app/')) ?>"><span class="am-logo">AM</span><span><strong>My TV</strong><small>Reseller workspace</small></span></a><div class="am-account"><span><?= e((string)($reseller['display_name'] ?? $reseller['username'] ?? 'Your account')) ?></span><a href="<?= e(url('dashboard.php')) ?>">Reseller panel ↗</a></div></header>
+<div class="am-workspace"><aside class="am-sidebar"><button class="am-menu-toggle" type="button" aria-expanded="false" aria-controls="am-section-navigation"><span>Sections</span><span aria-hidden="true">⌄</span></button><nav id="am-section-navigation" class="am-nav" aria-label="My TV management sections">
+<?php foreach (['Workspace'=>['overview'=>'Overview','settings'=>'App settings','pricing'=>'Packages & prices','promotions'=>'Promotions'],'Customers'=>['customer-access'=>'Customer access','customer-orders'=>'Orders','renewal-check'=>'Renewal check'],'Account'=>['square'=>'Square setup','license'=>'License']] as $group=>$items): ?><div class="am-nav-group"><span class="am-nav-label"><?= e($group) ?></span><?php foreach ($items as $id=>$label): ?><a href="#<?= e($id) ?>" data-am-link="<?= e($id) ?>"><?= e($label) ?><span aria-hidden="true">↗</span></a><?php endforeach; ?></div><?php endforeach; ?>
+</nav><a class="am-sidebar-license" href="#license"><span class="am-dot"></span> Licensed account <span aria-hidden="true">→</span></a></aside><div class="am-content">
+<?php if ($saved): ?><div class="flash success" role="status">App settings saved.</div><?php endif; ?>
 <?php if ($errorMessage): ?><div class="flash error" role="alert"><?= e($errorMessage) ?></div><?php endif; ?>
-<?php if ($squareSaved): ?><div class="flash success" role="status">Square operation completed. Check the connection and verified test status below.</div><?php endif; ?>
-<?php if ($priceSaved): ?><div class="flash success" role="status">Your customer renewal price was saved. General renewal permission and billing settings are saved separately with Save AM settings.</div><?php endif; ?>
-<?php if ($packageNameSaved): ?><div class="flash success" role="status">Customer-facing package name saved for your customers. Refresh the app to see it.</div><?php endif; ?>
-<?php if ($promoSaved): ?><div class="flash success" role="status">Promotion saved. Only eligible customers see active deals during the sale window.</div><?php endif; ?>
+<?php if ($squareSaved): ?><div class="flash success" role="status">Square updated. Review your connection below.</div><?php endif; ?>
+<?php if ($priceSaved): ?><div class="flash success" role="status">Renewal price saved.</div><?php endif; ?>
+<?php if ($packageNameSaved): ?><div class="flash success" role="status">Package name saved. Refresh the app to see it.</div><?php endif; ?>
+<?php if ($promoSaved): ?><div class="flash success" role="status">Promotion saved.</div><?php endif; ?>
 <?php if (isset($_GET['square_return'])): ?><div class="am-notice">Returned from Square. Use <strong>Check payment with Square</strong> below. Returning here does not confirm payment.</div><?php endif; ?>
 <form id="settings" data-am-section method="post" action="<?= e(url('am-app/#settings')) ?>">
+<div class="am-section-title"><span class="am-eyebrow">Make it yours</span><h1>App settings</h1><p class="am-muted">Your brand, customer permissions and renewal preferences.</p></div>
 <?= csrf_field() ?><input type="hidden" name="revision" value="<?= (int)($snapshot['revision'] ?? 0) ?>">
 <fieldset<?= $ready ? '' : ' disabled' ?>><div class="am-grid">
 <section class="card"><h2>Customer access</h2>
-<label class="am-switch"><input type="checkbox" name="app_enabled" value="1"<?= am_checked($settings['app_enabled']) ?>><span>Enable AM for my customers<small class="am-muted">The customer API checks this setting at every login and request.</small></span></label>
+<label class="am-switch"><input type="checkbox" name="app_enabled" value="1"<?= am_checked($settings['app_enabled']) ?>><span>Enable customer app access<small class="am-muted">Allow eligible customers to sign in.</small></span></label>
 <label class="am-field"><span>Who can use the app?</span><select name="customer_policy"><option value="selected"<?= am_selected($settings['customer_policy'], 'selected') ?>>Only customers I approve</option><option value="all"<?= am_selected($settings['customer_policy'], 'all') ?>>All customers belonging to me</option></select></label>
 <p class="am-muted">Approve individual services in <a href="#customer-access">Customer access</a>. Revoking access blocks that service even under the all-customers policy.</p>
-<label class="am-field"><span>Service display name (shown in the app)</span><input type="text" name="display_name" maxlength="120" placeholder="e.g. Extreme TV" value="<?= e($settings['display_name']) ?>"></label>
+<label class="am-field"><span>Your service name</span><input type="text" name="display_name" maxlength="120" placeholder="e.g. Extreme TV" value="<?= e($settings['display_name']) ?>"></label>
 <label class="am-field"><span>Customer support email</span><input type="email" name="support_email" maxlength="254" value="<?= e($settings['support_email']) ?>"></label>
 </section>
 <section class="card"><h2>Customer permissions</h2><p class="am-muted">Customers can edit permitted bouquets for free and renew their current package. Package and connection changes are handled by their reseller.</p>
 <?php foreach (['allow_bouquets' => 'Add or remove permitted bouquets (free)', 'allow_renewals' => 'Renew or extend current subscription'] as $field => $label): ?>
 <label class="am-switch"><input type="checkbox" name="<?= e($field) ?>" value="1"<?= am_checked($settings[$field]) ?>><span><?= e($label) ?></span></label>
 <?php endforeach; ?>
-<p class="am-muted">Services show the package and bouquets, without categories. Customer choices must stay within the permitted package and bouquet catalogue.</p>
 </section>
 <section class="card am-wide"><h2>Billing &amp; renewals</h2><div class="am-grid">
 <div><label class="am-field"><span>Billing flow</span><select name="billing_mode">
@@ -295,24 +282,23 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <p class="am-muted">Your public customer billing destination, not an API endpoint or secret. A link alone cannot verify payment or automatically renew a service.</p></div>
 <div><label class="am-field"><span>Customer billing currency</span><select name="currency"><option value="CAD"<?= am_selected($settings['currency'], 'CAD') ?>>CAD</option><option value="USD"<?= am_selected($settings['currency'], 'USD') ?>>USD</option></select></label>
 <label class="am-field"><span>Customer Square checkout mode</span><select name="square_mode"><option value="sandbox"<?= am_selected($settings['square_mode'], 'sandbox') ?>>Sandbox · no real payment or renewal</option><option value="live"<?= am_selected($settings['square_mode'], 'live') ?>>Production · real payment and renewal</option></select></label>
-<div class="am-muted">Gateway preferences · merchant setup pending</div>
-<?php foreach (['stripe' => 'Stripe', 'square' => 'Square', 'rampex' => 'Rampex'] as $value => $label): ?>
-<label class="am-switch"><input type="checkbox" name="gateways[]" value="<?= e($value) ?>"<?= am_checked(in_array($value, $settings['gateways'], true)) ?>><span><?= e($label) ?></span></label>
-<?php endforeach; ?>
-<p class="am-muted">Connect your merchant in <a href="#square">Square setup</a>. Customer renewal requires integrated billing and Square selected. Stripe and Rampex setup remain pending.</p></div>
+<div class="am-muted">Payment gateways</div>
+<label class="am-switch"><input type="checkbox" name="gateways[]" value="square"<?= am_checked(in_array('square',$settings['gateways'],true)) ?>><span>Square hosted checkout</span></label>
+<p class="am-muted">Connect your merchant account in <a href="#square">Square setup</a>.</p>
+<details class="am-help"><summary>Other gateway preferences</summary><p>These preferences are saved, but checkout for these providers is not yet available.</p><?php foreach (['stripe'=>'Stripe','rampex'=>'Rampex'] as $value=>$label): ?><label class="am-switch"><input type="checkbox" name="gateways[]" value="<?= e($value) ?>"<?= am_checked(in_array($value,$settings['gateways'],true)) ?>><span><?= e($label) ?></span></label><?php endforeach; ?></details></div>
 </div><div class="am-notice">AM checkout is <strong>renewal-only</strong>. Customers must contact their reseller for package or connection changes.</div>
 </section></div>
-<div class="am-actions"><span class="am-muted">Only this reseller's AM settings are saved. No existing service is changed.</span><button class="btn btn-primary" type="submit">Save AM settings</button></div>
+<div class="am-actions"><span class="am-muted">Changes apply to your customers.</span><button class="btn btn-primary" type="submit">Save app settings</button></div>
 </fieldset></form>
 <section id="customer-access" data-am-section class="card am-square"><h2>Individual customer access</h2>
-<p class="am-muted">Enter the customer's numeric service ID from your reseller panel. The worker verifies that the service belongs to your account.</p>
+<p class="am-muted">Approve or revoke app access using a service ID from your reseller panel.</p>
 <form method="post" action="<?= e(url('am-app/#customer-access')) ?>">
 <?= csrf_field() ?><input type="hidden" name="action" value="customer_access">
 <label class="am-field"><span>Customer service ID</span><input type="text" name="line_id" inputmode="numeric" pattern="[1-9][0-9]{0,17}" required></label>
 <label class="am-field"><span>Access</span><select name="enabled"><option value="1">Approve</option><option value="0">Revoke</option></select></label>
 <button class="btn btn-primary" type="submit">Save customer access</button></form></section>
 <section id="renewal-check" data-am-section class="card am-square"><h2>Check a service's renewal availability</h2>
-<p class="am-muted">Saving a package price is separate from the general renewal permission and Square setup. Enter the numeric customer service ID from your reseller panel to see the exact reason an offer is unavailable. This check does not charge or renew anything.</p>
+<p class="am-muted">Find out why a customer cannot renew. This check never charges or changes their service.</p>
 <form method="post" action="<?= e(url('am-app/#renewal-check')) ?>"><?= csrf_field() ?><input type="hidden" name="action" value="renewal_diagnostic">
 <label class="am-field"><span>Customer service ID</span><input type="text" name="line_id" inputmode="numeric" pattern="[1-9][0-9]{0,17}" required></label>
 <button class="btn" type="submit">Check renewal availability</button></form>
@@ -321,10 +307,10 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <?php if ($renewalDiagnostic['offers']): ?><p>Available currencies: <?= e(implode(', ',$renewalDiagnostic['offers'])) ?></p><?php endif; ?></div><?php endif; ?>
 </section>
 <section id="pricing" data-am-section class="card am-square">
-<h2>Package renewal prices</h2>
+<h2>Packages &amp; prices</h2>
 <p class="am-muted">Find a package, expand its row, and set your customer price. Each package saves separately.</p>
 <div class="am-summary"><span><strong><?= count($catalogue) ?></strong> packages</span><?php foreach ($statusLabels as $status=>$label): ?><span><?= $stateCounts[$status] ?> <?= e(strtolower($label)) ?></span><?php endforeach; ?></div>
-<?php if (!$settings['allow_renewals'] || !in_array($settings['billing_mode'],['integrated','both'],true) || !in_array('square',$settings['gateways'],true)): ?><div class="am-notice"><strong>Renewal setup incomplete.</strong> In <a href="#settings">App settings</a>, enable renewals, select integrated billing and Square, then Save AM settings. Package prices save separately.</div><?php endif; ?>
+<?php if (!$settings['allow_renewals'] || !in_array($settings['billing_mode'],['integrated','both'],true) || !in_array('square',$settings['gateways'],true)): ?><div class="am-notice"><strong>Finish renewal setup.</strong> Enable renewals, integrated billing and Square in <a href="#settings">App settings</a>.</div><?php endif; ?>
 <details class="am-help"><summary>How renewal pricing works</summary><p>Set your own customer price for each package offered to your reseller account. The service renewal still deducts the package's fixed credit cost from your reseller balance. <strong>Bouquets have no extra charge.</strong></p>
 <p class="am-muted">Customers only see prices for their current package. 0.00 means a free customer renewal; you still pay the wholesale credits. Production mode renews after payment verification; sandbox never modifies service.</p>
 </details>
@@ -356,7 +342,7 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <form class="am-alias" style="padding:18px;border-top:1px solid var(--border)" method="post" action="<?= e($pricingUrl) ?>">
 <?= csrf_field() ?><input type="hidden" name="action" value="package_name"><input type="hidden" name="package_id" value="<?= $package['id'] ?>"><input type="hidden" name="revision" value="<?= (int)($packageNames[$package['id']]['revision'] ?? 0) ?>">
 <label class="am-field"><span>Customer-facing package name</span><input type="text" name="display_name" maxlength="120" placeholder="e.g. Premium" value="<?= e($packageNames[$package['id']]['display_name'] ?? '') ?>"></label>
-<p class="am-muted">Shown to your customers in the app, renewal reviews and deals. Applies across currencies. Leave blank to use the original package name. Package details and prices stay the same.</p>
+<p class="am-muted">Your customers see this name across the app. Leave blank to use the original.</p>
 <button class="btn" type="submit">Save package name</button></form></details>
 <?php endforeach; ?></div>
 <nav class="am-pager" aria-label="Package pages">
@@ -367,7 +353,7 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 </section>
 <?php require __DIR__.'/promotions-view.php'; ?>
 <section id="customer-orders" data-am-section class="card am-square"><h2>Customer renewal orders</h2>
-<p class="am-muted">Most recent 50 orders for your customers. Retry checks the original payment and renewal ID; it does not create another invoice. If a paid order needs review, check your wholesale credit balance, customer access and package availability before retrying.</p>
+<p class="am-muted">Your latest 50 renewal orders.</p><details class="am-help"><summary>Help with an order</summary><p>Retry checks the original payment without creating another invoice. For paid orders needing review, check your credit balance, customer access and package availability first.</p></details>
 <?php if ($customerOrdersError): ?><p role="alert"><?= e($customerOrdersError) ?></p>
 <?php elseif (!$customerOrders): ?><p>No customer orders yet.</p><?php else: foreach ($customerOrders as $order): ?>
 <details class="am-package"><summary><span><strong><?= e($order['package_name']) ?></strong><small>Service #<?= e($order['line_id']) ?> · <?= e($order['mode']) ?></small></span><span><?= e(number_format($order['amount_minor']/100,2,'.','')) ?> <?= e($order['currency']) ?><small><?= e($order['state']) ?></small></span></summary><div class="am-price">
@@ -377,8 +363,8 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <form method="post" action="<?= e(url('am-app/#customer-orders')) ?>"><?= csrf_field() ?><input type="hidden" name="action" value="customer_retry"><input type="hidden" name="order_id" value="<?= e($order['id']) ?>"><button class="btn" type="submit">Retry original order</button></form>
 <?php endif; ?></div></details><?php endforeach; endif; ?></section>
 <section id="square" data-am-section class="card am-square">
-<h2>Square · merchant connection &amp; checkout test</h2>
-<p class="am-muted">Uses the Hub-style Square-hosted checkout. Card details stay with Square; AM checks the merchant, location, amount, currency and captured payment on the server. Credentials are encrypted in private storage and are never shown again.</p>
+<h2>Square setup</h2>
+<p class="am-muted">Connect your merchant account to accept customer renewal payments.</p><details class="am-help"><summary>How payments are handled</summary><p>Checkout is hosted by Square. Payments are verified before a renewal is applied. Your credentials are encrypted and never displayed again.</p></details>
 <?php if (!$square): ?><p>Install the gateway update to enable connection setup.</p><?php else: ?>
 <details class="am-help"<?= $squareConnections ? '' : ' open' ?>><summary>Connect or update a Square merchant</summary>
 <form method="post" action="<?= e(url('am-app/#square')) ?>" autocomplete="off">
@@ -386,7 +372,7 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <div class="am-grid"><label class="am-field"><span>Square environment</span><select name="mode"><option value="sandbox">Sandbox · test payments</option><option value="live">Production · real payments</option></select></label>
 <label class="am-field"><span>Location ID</span><input type="text" name="location" required maxlength="180" autocomplete="off"></label>
 <label class="am-field am-wide"><span>Access token</span><input type="password" name="token" required maxlength="512" autocomplete="new-password"></label></div>
-<p class="am-muted">From your Square Developer application, use an access token and location from the same environment. Hosted checkout does not need an Application ID. For scoped tokens, grant MERCHANT_PROFILE_READ, ORDERS_READ, ORDERS_WRITE, PAYMENTS_READ and PAYMENTS_WRITE. Reconnecting the same merchant/location updates its token and keeps its original test invoice.</p>
+<details class="am-help"><summary>Where to find your Square credentials</summary><p>In your Square Developer application, use an access token and location from the same environment. An Application ID is not needed. Scoped tokens need MERCHANT_PROFILE_READ, ORDERS_READ, ORDERS_WRITE, PAYMENTS_READ and PAYMENTS_WRITE. Reconnecting updates your token and keeps the original test invoice.</p></details>
 <button class="btn btn-primary" type="submit">Verify &amp; save Square connection</button>
 </form></details>
 <?php foreach ($squareConnections as $connection): $test = $square->test($resellerId, $connection['id']); ?>
@@ -394,7 +380,7 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <h2><?= e($connection['business_name']) ?> · <?= $connection['mode'] === 'live' ? 'Production / real money' : 'Sandbox / test money' ?></h2>
 <p class="am-muted">Merchant <?= e($connection['merchant_id']) ?> · Location <?= e($connection['location_id']) ?> · <?= e($connection['currency']) ?></p>
 <p><strong>Webhook URL:</strong><br><code><?= e($square->webhookUrl($connection['id'])) ?></code></p>
-<p class="am-muted">In Square Developer → your application → the matching environment → Webhooks, add this exact URL, API version 2026-09-16, and events <code>payment.created</code> and <code>payment.updated</code>. Paste its signature key below. Do not reuse Hub's webhook URL.</p>
+<details class="am-help"><summary>Webhook setup instructions</summary><p>In Square Developer → your application → the matching environment → Webhooks, add this exact URL, API version 2026-09-16, and events <code>payment.created</code> and <code>payment.updated</code>. Paste its signature key below. Use this URL rather than Hub's.</p></details>
 <form method="post" action="<?= e(url('am-app/#square')) ?>" autocomplete="off">
 <?= csrf_field() ?><input type="hidden" name="action" value="square_webhook"><input type="hidden" name="connection" value="<?= e($connection['id']) ?>">
 <label class="am-field"><span>Webhook signature key <?= $connection['webhook_saved'] ? '(saved; enter only to replace)' : '' ?></span><input type="password" name="webhook_key" required maxlength="512" autocomplete="new-password"></label>
@@ -415,16 +401,23 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 </section></details>
 <?php endforeach; endif; ?>
 </section>
-</main>
+<?php require __DIR__.'/workspace-view.php'; ?>
+</div></div></main>
 <script>
 (() => {
+    document.documentElement.classList.add('am-enhanced');
     const sections = [...document.querySelectorAll('[data-am-section]')];
     const links = [...document.querySelectorAll('[data-am-link]')];
+    const menu = document.querySelector('.am-menu-toggle');
+    menu.addEventListener('click',()=>menu.setAttribute('aria-expanded',menu.getAttribute('aria-expanded')==='true'?'false':'true'));
     function showSection() {
         const requested = location.hash.slice(1);
         const id = sections.some(section => section.id === requested) ? requested : <?= json_encode($initialSection) ?>;
         sections.forEach(section => { section.hidden = section.id !== id; });
         links.forEach(link => { if (link.dataset.amLink === id) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current'); });
+        const active = links.find(link=>link.dataset.amLink===id);
+        menu.querySelector('span').textContent = active ? active.firstChild.textContent.trim() : 'Sections';
+        menu.setAttribute('aria-expanded','false');
     }
     window.addEventListener('hashchange', showSection);
     showSection();

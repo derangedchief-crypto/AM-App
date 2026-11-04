@@ -142,6 +142,16 @@ def run():
             assert request()[0] == 503
             login('user=1')
             fields = form()
+            with sqlite3.connect(db) as connection:
+                own_license=connection.execute('SELECT id FROM am_licenses WHERE reseller_id="1"').fetchone()[0]
+                other_license=connection.execute('SELECT id FROM am_licenses WHERE reseller_id="2"').fetchone()[0]
+                connection.execute('UPDATE am_licenses SET expires=? WHERE reseller_id="1"',(2000000000,))
+            body=request()[1]
+            assert own_license in body and other_license not in body
+            assert 'Time-limited' in body and '18 May 2033' in body
+            with sqlite3.connect(db) as connection:
+                connection.execute('UPDATE am_licenses SET expires=NULL WHERE reseller_id="1"')
+            assert 'No scheduled expiry' in request()[1]
             assert request(data={'action': 'package_price'})[0] == 419
             price_fields = {key: re.search('name="' + key + '" value="([^"]*)"', request()[1]).group(1) for key in ['package_id', 'fingerprint']}
             price_input = {**fields, **price_fields, 'action': 'package_price', 'currency': 'CAD', 'amount': '20.00', 'enabled': '1', 'reseller_id': '2', 'price_credits': '0'}
@@ -238,7 +248,7 @@ def run():
             assert key not in request(admin_path)[1]
             login('user=1')
             status,body,_=request()
-            assert status == 403 and 'Activate license' in body and 'Save AM settings' not in body
+            assert status == 403 and 'Activate license' in body and 'Save app settings' not in body
             csrf=re.search('name="csrf" value="([^"]*)"',body).group(1)
             assert request(data={'csrf':csrf,'action':'settings','revision':'1'})[0] == 403
             assert request(data={'action':'license_activate','license_key':key})[0] == 419

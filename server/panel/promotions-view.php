@@ -12,9 +12,9 @@ $promoPage=max(1,min(max(1,(int)ceil(count($promoRows)/10)),(int)(is_string($_GE
 ?>
 <section id="promotions" data-am-section class="card am-square">
 <h2>Promotions</h2>
-<p class="am-muted">Limited-time renewal deals for a customer's current package. The banner appears in the app's Deals screen between the start and end dates. Future renewals return to normal pricing.</p>
+<p class="am-muted">Create limited-time renewal offers for your customers' current packages.</p>
 <p><a class="btn" href="#pricing">Choose a package to promote</a></p>
-<p class="am-muted">In Packages &amp; prices, expand a package and choose Create deal. Save an enabled normal price first. Promotion amounts must be lower than that price. Your wholesale credit cost stays the same.</p>
+<details class="am-help"><summary>How promotions work</summary><p>Choose a package with an enabled renewal price, then select Create deal. Deals must cost less than the normal price; your wholesale credit cost stays the same. Banners appear in the app during the sale window. Future renewals return to normal pricing.</p></details>
 <?php if ($promoError): ?><p role="alert"><?= e($promoError) ?></p><?php endif; ?>
 <?php if ($promoPackage): ?>
 <form method="post" enctype="multipart/form-data" action="<?= e(url('am-app/?'.http_build_query($editPromo ? ['promo_edit'=>$editPromo['id']] : ['promo_package'=>$promoPackage['id'],'prices_currency'=>$priceCurrency]).'#promotions')) ?>">
@@ -31,7 +31,7 @@ $promoPage=max(1,min(max(1,(int)ceil(count($promoRows)/10)),(int)(is_string($_GE
 <label class="am-field"><span>Ends · UTC (deal disappears automatically)</span><input type="datetime-local" name="ends" required value="<?= e(gmdate('Y-m-d\TH:i',(int)($editPromo['ends'] ?? time()+7*86400))) ?>"></label>
 </div>
 <label class="am-switch"><input type="checkbox" name="enabled" value="1"<?= am_checked(!$editPromo || (bool)$editPromo['enabled']) ?>><span>Publish during these dates</span></label>
-<p class="am-muted">Dates use UTC. Customers see the deadline in their device's timezone. New checkout must begin before the deal ends; existing orders keep their agreed price. No ongoing discounted rate is promised.</p>
+<p class="am-muted">Dates use UTC. The offer ends automatically; existing orders keep their agreed price.</p>
 <button class="btn btn-primary" type="submit">Save promotion</button> <a class="btn" href="<?= e(url('am-app/#promotions')) ?>">Close editor</a>
 </form>
 <?php endif; ?>
@@ -41,7 +41,7 @@ $promoPage=max(1,min(max(1,(int)ceil(count($promoRows)/10)),(int)(is_string($_GE
 ?>
 <details class="am-package"><summary><span><strong><?= e($promo['title']) ?></strong><small>Package #<?= $promo['package_id'] ?> · <?= e($promoStatus) ?> · ends <?= e(gmdate('Y-m-d H:i',(int)$promo['ends'])) ?> UTC</small></span><span><?= e(number_format((int)$promo['amount_minor']/100,2,'.','').' '.$promo['currency']) ?></span></summary>
 <div class="am-price"><img loading="lazy" src="<?= e(url('am-app/promo-banner.php?id='.$promo['id'])) ?>" alt="<?= e($promo['title']) ?>" style="display:block;width:100%;max-width:600px;max-height:300px;object-fit:contain;border-radius:12px">
-<p><?= e($promo['description']) ?></p><p class="am-muted">Visibility also requires the linked package's normal price, renewal permissions and matching Square setup. Only customers on this exact package can redeem the deal.</p>
+<p><?= e($promo['description']) ?></p><p class="am-muted">Available to customers on this package, subject to renewal and payment setup.</p>
 <a class="btn" href="<?= e(url('am-app/?promo_edit='.$promo['id'].'#promotions')) ?>">Edit promotion</a>
 <?php if ((int)$promo['enabled']): ?><form method="post" action="<?= e(url('am-app/#promotions')) ?>"><?= csrf_field() ?><input type="hidden" name="action" value="promotion_disable"><input type="hidden" name="promo_id" value="<?= e($promo['id']) ?>"><input type="hidden" name="revision" value="<?= $promo['revision'] ?>"><button class="btn" type="submit">Disable promotion</button></form><?php endif; ?>
 </div></details>
