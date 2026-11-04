@@ -4,7 +4,7 @@
 
 The owner supplied `derangedchief-crypto/Reseller-website` as the reference for working panel/worker functions. Reviewed commit: `3ea28692e5ca5ff9356d61b76a2c7b13e86e6b19`.
 
-The required AM hierarchy is **customer's package → assigned/available bouquets → categories belonging to each bouquet**. Bouquet selection changes channel access; categories are the contents of those bouquets, not independent service selections.
+The owner simplified the required AM hierarchy to **customer's package → assigned/available bouquets**, without displaying categories. Bouquet selection changes channel access. Category mapping is no longer a prerequisite.
 
 AM must own its implementation and deployment. Do not modify the reseller website, its existing workers, or Hub. Their code is a reference. This investigation made no live worker requests or panel writes.
 
@@ -45,7 +45,7 @@ The snapshot confirms these data relationships:
 - `bouquets.id`, `bouquet_name`, and `bouquet_order` provide catalogue identity/display order.
 - The reseller worker's package scope uses `users.member_group_id` and `override_packages` with package `groups`.
 
-Its `/bouquets` model contains only `id` and `name`; it does not expose categories. No bouquet-to-category schema/query was found in the reviewed repository or this snapshot. Do not infer that relationship from category names or the customer's flat `get_live_categories` result. Inspect the deployed worker/panel schema read-only to identify the authoritative relationship, including whether bouquets list category IDs directly or list streams that must be joined to categories.
+Its `/bouquets` model contains `id` and `name`, which is sufficient for the requested bouquet list when joined with the authenticated customer's package and assignments. The previously missing bouquet-to-category mapping is no longer needed. Do not relabel the flat provider category response as bouquets.
 
 The snapshot's `/edit-line` updates the panel database and then calls `_overcast_refresh_customer`. A committed database change can be followed by a failed native refresh. AM must represent that as saved/pending activation and repair refresh without treating it as an uncommitted change or repeating financial operations.
 
@@ -56,9 +56,9 @@ The current package-change UI describes charging the positive package credit-pri
 ## Next integration
 
 1. Obtain the current deployed worker source/configuration context through private server access. Inspect schema/read paths without modifying the existing service.
-2. Identify the bouquet-to-category relationship and confirm live/VOD/series category types where relevant.
+2. Confirm package and assigned/available bouquet read paths against that deployed version. No category lookup is required.
 3. Deploy a separate AM service with its own configuration, credentials, customer sessions, and dedicated port/hostname. It can share the host if the owner chooses, but must not overwrite or restart the existing worker.
-4. Return the current package and bouquets with nested categories to AM Android. Keep unavailable data explicit; do not replace it with sample records.
+4. Return the current package and bouquet IDs/names/selection state to AM Android. Keep unavailable data explicit; do not replace it with sample records.
 5. Add customer-scoped bouquet edits with package validation, concurrency handling, audit, and native refresh, before adding paid package/connection changes.
 
 Needed from the owner now: the server/current worker folder and private access, plus the intended AM service hostname or confirmation to host AM separately on the same machine. No database password or worker secret should be pasted into public source/issues.

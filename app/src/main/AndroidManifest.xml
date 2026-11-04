@@ -2,7 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application android:theme="@style/Theme.AM" android:label="AM Account"
         android:icon="@drawable/ic_launcher" android:allowBackup="false" android:supportsRtl="true"
-        android:usesCleartextTraffic="false" android:dataExtractionRules="@xml/data_extraction_rules">
+        android:usesCleartextTraffic="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

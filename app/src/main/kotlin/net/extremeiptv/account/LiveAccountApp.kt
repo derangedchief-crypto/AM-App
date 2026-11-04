@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -33,13 +34,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import net.extremeiptv.account.data.ServiceAccount
 import net.extremeiptv.account.data.ServiceStatus
+import net.extremeiptv.account.data.ServiceAccountClient
+import net.extremeiptv.account.data.EncryptedLoginStore
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 @Composable
-internal fun LiveAccountApp(model: AccountViewModel = viewModel()) = AccountTheme {
+internal fun LiveAccountApp() = AccountTheme {
+    val context = LocalContext.current.applicationContext
+    val model: AccountViewModel = viewModel { AccountViewModel(ServiceAccountClient(), EncryptedLoginStore(context)) }
     val state by model.state.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, model) {
@@ -51,7 +56,8 @@ internal fun LiveAccountApp(model: AccountViewModel = viewModel()) = AccountThem
     }
     val account = state.account
     if (account == null) {
-        LiveSignIn(state, model::signIn)
+        if (state.restoring || state.canRetrySavedLogin) SavedLoginScreen(state, model::restoreSavedLogin, model::signOut)
+        else LiveSignIn(state, model::signIn)
     } else {
         // Account changes/logouts dispose navigation and any visible private account details.
         key(account.username) { LiveDashboard(account, state, model::refresh, model::signOut) }
@@ -107,22 +113,36 @@ private fun LiveSignIn(state: LiveAccountState, onSignIn: (String, String, Strin
             Text(if (state.busy) "Verifying your service…" else "Sign in", fontWeight = FontWeight.Bold)
         }
         Hint("Uses the same service-provider login as Hub. AM Account keeps its own session; it does not sign you in or out of Hub.")
-        Hint("For this first live build, your session stays in memory only. You will sign in again after the app process closes. Billing and service changes are not connected yet.")
+        Hint("Your login is remembered securely on this device. AM verifies it automatically when you reopen the app. Signing out removes the saved login.")
+    }
+}
+
+@Composable
+private fun SavedLoginScreen(state: LiveAccountState, retry: () -> Unit, signOut: () -> Unit) {
+    Column(Modifier.fillMaxSize().background(Ink).safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        Brand()
+        Heading("Welcome back.", "Your login is saved. Checking your service with the provider.")
+        if (state.busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        state.error?.let { ErrorNotice(it) }
+        if (!state.busy) {
+            Hint("Your saved login is still on this device. A temporary connection problem does not sign you out.")
+            Primary("Retry saved login", retry)
+        }
+        Secondary("Use another account", signOut)
     }
 }
 
 @Composable
 private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refresh: () -> Unit, signOut: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf("Home") }
-    var channels by rememberSaveable { mutableStateOf(false) }
-    var search by rememberSaveable { mutableStateOf("") }
     var showLogout by remember { mutableStateOf(false) }
-    val scroll = key(tab, channels) { rememberScrollState() }
-    BackHandler(enabled = channels || tab != "Home") { if (channels) channels = false else tab = "Home" }
+    val scroll = key(tab) { rememberScrollState() }
+    BackHandler(enabled = tab != "Home") { tab = "Home" }
     Scaffold(containerColor = Ink, bottomBar = {
         NavigationBar(containerColor = Ink) {
             listOf("Home", "Services", "Bills", "Account").forEach { item ->
-                NavigationBarItem(selected = tab == item, onClick = { tab = item; channels = false },
+                NavigationBarItem(selected = tab == item, onClick = { tab = item },
                     icon = { Icon(when (item) {
                         "Home" -> Icons.Default.Home
                         "Services" -> Icons.Default.Settings
@@ -143,20 +163,8 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                 TextButton(onClick = refresh, enabled = !state.busy) { Text(if (state.busy) "Refreshing…" else "Refresh") }
             }
             if (state.busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            state.error?.let { ErrorNotice("$it\nShowing your last verified account details.") }
-            if (channels) {
-                TextButton(onClick = { channels = false }) { Text("← Back to service") }
-                Heading("Your channel groups", "Groups currently returned by your service provider. This is not a package-selection screen.")
-                account.categoryWarning?.let { ErrorNotice(it) }
-                OutlinedTextField(value = search, onValueChange = { search = it }, label = { Text("Search channel groups") },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true)
-                val matches = remember(account.categories, search) { account.categories.filter { it.contains(search, ignoreCase = true) } }
-                if (matches.isEmpty()) Hint(if (account.categories.isEmpty()) "No channel groups were returned." else "No matching groups.")
-                else {
-                    Hint("Showing ${minOf(100, matches.size)} of ${matches.size} groups. Search to narrow the list.")
-                    matches.take(100).forEach { name -> BoxCard { Text(name) } }
-                }
-            } else when (tab) {
+            state.error?.let { ErrorNotice(if (state.stale) "$it\nShowing your last verified account details." else it) }
+            when (tab) {
                 "Home" -> {
                     Heading("Everything,\nin your control.", "Welcome, ${account.username}.")
                     LiveServiceCard(account)
@@ -184,8 +192,11 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                         Detail("Created", account.createdAt?.let(::dateText) ?: "Not provided")
                         Detail("Subscription length", "Not provided by this API")
                     }
-                    account.categoryWarning?.let { ErrorNotice(it) }
-                    Secondary("View channel groups (${account.categories.size})") { channels = true; search = "" }
+                    BoxCard {
+                        Label("BOUQUETS")
+                        Text("Bouquet connection pending", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                        Hint("Your assigned bouquets will appear here once AM's worker is connected. The current provider login API does not return your bouquet names.")
+                    }
                     Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) { Text("Renewal — setup pending") }
                     OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) { Text("Modify service — setup pending") }
                     Hint("The first live build reads your service only. Renewals and changes need AM Account's billing and service-management backend.")
@@ -206,8 +217,8 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                         Label("SIGNED IN AS")
                         Text(account.username, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                         Detail("Account status", account.status.label)
-                        Detail("App version", "0.2.0 · Live read-only")
-                        Detail("Session", "This app only · memory-only")
+                        Detail("App version", "0.2.1 · Live read-only")
+                        Detail("Login", if (state.remembered) "Remembered on this device" else "Not saved on this device")
                     }
                     Hint("AM Account uses its own login code and session. No Hub settings, devices, profiles or subscriptions are changed by this app.")
                     Secondary("Sign out") { showLogout = true }
@@ -217,7 +228,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
         }
     }
     if (showLogout) AlertDialog(onDismissRequest = { showLogout = false }, title = { Text("Sign out of AM Account?") },
-        text = { Text("Your session will be removed from this app. Your Hub login is unaffected.") },
+        text = { Text("Your saved login will be removed from this device. Your Hub login is unaffected.") },
         confirmButton = { TextButton(onClick = { showLogout = false; signOut() }) { Text("Sign out") } },
         dismissButton = { TextButton(onClick = { showLogout = false }) { Text("Cancel") } })
 }

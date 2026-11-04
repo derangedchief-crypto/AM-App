@@ -26,15 +26,13 @@ class ServiceAccountClientTest {
             .put("exp_date", expiry).put("max_connections", "3").put("active_cons", "1").put("is_trial", "0"))
             .put("server_info", JSONObject().put("timestamp_now", 1800000000)).toString()
 
-    @Test fun `activation uses Hub protocol then fetches only account and channel groups`() = runBlocking {
+    @Test fun `activation uses Hub protocol and requests account only without categories`() = runBlocking {
         respond("""{"ok":true,"username":"customer","password":"secret"}""")
         respond(profile())
-        respond("""[{"category_name":"Sports"},{"category_name":"News"}]""")
         val credentials = client.resolveCode("123456")
         val account = client.readAccount(credentials)
         assertEquals(3, account.maxConnections)
         assertEquals(1, account.activeConnections)
-        assertEquals(listOf("Sports", "News"), account.categories)
         assertNull(account.packageName)
         val activate = server.takeRequest(1, TimeUnit.SECONDS)!!
         assertEquals("POST", activate.method)
@@ -44,13 +42,13 @@ class ServiceAccountClientTest {
         assertEquals("GET", accountRequest.method)
         assertEquals("no-store", accountRequest.getHeader("Cache-Control"))
         assertNull(accountRequest.requestUrl!!.queryParameter("action"))
-        assertEquals("get_live_categories", server.takeRequest(1, TimeUnit.SECONDS)!!.requestUrl!!.queryParameter("action"))
+        assertEquals(2, server.requestCount)
     }
 
     @Test fun `credentials are URL encoded and password whitespace is preserved`() = runBlocking {
         val user = "a&name+/?"
         val pass = " p&ss+=?# "
-        respond(profile(user)); respond("[]")
+        respond(profile(user))
         client.readAccount(ServiceCredentials(user, pass))
         val url = server.takeRequest(1, TimeUnit.SECONDS)!!.requestUrl!!
         assertEquals(user, url.queryParameter("username"))
@@ -97,20 +95,7 @@ class ServiceAccountClientTest {
         respond(profile(status = "Expired"))
         val account = client.readAccount(ServiceCredentials("customer", "secret"))
         assertEquals(ServiceStatus.EXPIRED, account.status)
-        assertTrue(account.categories.isEmpty())
         assertEquals(1, server.requestCount)
-    }
-
-    @Test fun `category outage does not fabricate categories or fail verified login`() = runBlocking {
-        respond(profile()); respond("unavailable", 503)
-        val account = client.readAccount(ServiceCredentials("customer", "secret"))
-        assertTrue(account.categories.isEmpty())
-        assertNotNull(account.categoryWarning)
-    }
-
-    @Test fun `revocation during category fetch invalidates login`() = runBlocking {
-        respond(profile()); respond("unauthorized", 401)
-        assertFailure(FailureKind.UNAUTHORIZED) { client.readAccount(ServiceCredentials("customer", "secret")) }
     }
 
     @Test fun `missing auth and unknown status fail closed`() {

@@ -18,11 +18,12 @@ Android customer account-management project for the owner's customers.
 - Signed APK releases and in-app updates following Extreme Hub's release process.
 - Publish source code in the public AM-App GitHub repository, as requested by the owner.
 - Keep AM's implementation independent. Hub is a reference only: do not modify its app, backend functions, enrollment, settings, or deployment for this project.
-- Show services as package → bouquets → categories within each bouquet. Adding/removing permitted bouquets changes channel access.
+- Show services as package → bouquets, without categories. Adding/removing permitted bouquets changes channel access.
+- Remember the customer's original login securely across app restarts; explicit sign-out removes it.
 
 ## Reseller panel and worker reference
 
-Use the owner's `derangedchief-crypto/Reseller-website` as the reference for package, bouquet, renewal, and connection-management functions. AM owns its copies/implementations; the reseller site and existing workers remain separate. See [`docs/reseller-worker-reference.md`](docs/reseller-worker-reference.md) for traced endpoints, known schema, and remaining deployment/category-mapping inputs. The current live APK still shows flat provider categories until this richer backend is connected.
+Use the owner's `derangedchief-crypto/Reseller-website` as the reference for package, bouquet, renewal, and connection-management functions. AM owns its copies/implementations; the reseller site and existing workers remain separate. See [`docs/reseller-worker-reference.md`](docs/reseller-worker-reference.md) for traced endpoints, known schema, and remaining deployment inputs. The live APK shows a bouquet setup-pending state until this backend is connected; category mapping is no longer needed.
 
 ## Billing reference for future integration
 
@@ -48,7 +49,7 @@ Current checkout requires an approved branded package and an expired service. A 
 
 ## Status
 
-Version **0.2.0: live, read-only service access**. The Android app now calls the real service-provider endpoints using its own implementation of the Hub login protocol. It displays only returned account data; the live navigation has no demo-account entry, sample bills, invented package, or assumed credit balance.
+Version **0.2.1: remembered login and bouquet-only services**. The Android app calls the real service-provider endpoints using its own implementation of the Hub login protocol. It displays only returned account data; the live navigation has no demo-account entry, sample bills, invented package, or assumed credit balance.
 
 Login and account refresh are connected in code. End-to-end verification with a real customer requires an authorized test account; no customer credentials have been used during development. Billing, payment, service modifications, and automatic APK updates are still pending.
 
@@ -56,10 +57,11 @@ Login and account refresh are connected in code. End-to-end verification with a 
 
 - Activation-code or service-credential sign-in with loading and error states
 - Home dashboard with verified service status, expiry, and connection counts
-- Service details and searchable provider-returned channel groups
+- Service details and a bouquet connection-pending section; no category list or category request
 - Explicit unavailable states for package/duration fields the provider doesn't supply
 - Billing and credit setup-pending states (not fake zero balances or empty fetched history)
 - Account refresh, stale-data notice, and independent sign-out
+- Automatic verification of an encrypted saved login on restart, retry without retyping after an outage, and removal on explicit sign-out
 
 The complete service-change/billing designs remain in the visual companion for future backend integration. Real service-change and renewal controls are disabled until that integration exists.
 
@@ -72,7 +74,9 @@ Requires JDK 17 and Android SDK 36. Set `ANDROID_HOME` or create an ignored `loc
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Open **AM Account** and use an authorized test customer's Hub activation code or service username/password. The live app uses application ID `net.extremeiptv.account`; the original `.demo` APK can coexist. Credentials and account data remain in the ViewModel's memory only, survive rotation, and are cleared on sign-out or process death. Nothing is saved in preferences, files, backups, or logs. A background/foreground transition refreshes the account.
+Open **AM Account** and use an authorized test customer's Hub activation code or service username/password. The live app uses application ID `net.extremeiptv.account`; the original `.demo` APK can coexist. After successful verification, the original login is encrypted with AES-256-GCM and an app-specific Android Keystore key in app-private, no-backup storage. A code login saves the code, not the password returned by code resolution. A password login saves the entered service credentials encrypted. Raw secrets are not logged or saved in UI state/backups.
+
+On restart the app verifies the saved login before showing account data. A temporary outage preserves it and offers retry. Sign-out deletes the encrypted file and its key; revoked credentials are also removed. The account snapshot itself remains memory-only. A background/foreground transition refreshes the account. After updating from 0.2.0, sign in once to create the saved login.
 
 See [`docs/live-account-integration.md`](docs/live-account-integration.md) for endpoint contracts, ownership boundaries, and the device acceptance checklist.
 
@@ -88,6 +92,7 @@ Open [`docs/screens.html`](docs/screens.html) in a browser for the original fict
 
 ### Verification
 
-- Live debug APK builds successfully. All 18 protocol/session unit tests pass using synthetic responses; Android lint reports 0 errors (11 SDK/dependency/backup advisories). See `app/src/test`.
+- Protocol/session and encrypted-login tests use synthetic responses. See `app/src/test` for restart, outage, rejection, late-callback, sign-out, tampering, and format validation coverage.
+- Version 0.2.1: 27 tests pass; debug APK builds; lint reports 0 errors and 10 dependency/SDK advisories. APK signature matches 0.2.0 for in-place test updates.
 - Browser design companion checked at 360px width across 10 screens with no horizontal overflow or JavaScript errors. Verified selections reaching review, demo confirmation, bill filters, and invoice navigation.
 - Native runtime interaction has not been verified: the available emulator cannot start because this environment lacks KVM permissions.

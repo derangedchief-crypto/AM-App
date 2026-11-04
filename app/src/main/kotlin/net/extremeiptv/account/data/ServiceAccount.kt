@@ -1,11 +1,10 @@
 package net.extremeiptv.account.data
 
-import org.json.JSONArray
 import org.json.JSONObject
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
-/** Memory-only credentials. Never use a generated data-class toString for secrets. */
+/** Resolved credentials used in memory. Never use a generated data-class toString for secrets. */
 internal class ServiceCredentials(val username: String, val password: String) {
     override fun toString() = "ServiceCredentials([redacted])"
 }
@@ -22,8 +21,6 @@ internal data class ServiceAccount(
     val trial: Boolean?,
     val packageName: String?,
     val createdAt: Long?,
-    val categories: List<String> = emptyList(),
-    val categoryWarning: String? = null,
     val checkedAtMillis: Long = System.currentTimeMillis(),
 )
 
@@ -85,14 +82,6 @@ internal object AccountParser {
             packageName = text(user, "package_name", 160) ?: text(user, "package", 160),
             createdAt = positiveTimestamp(user.opt("created_at")),
         )
-    }
-
-    fun categories(json: JSONArray): List<String> {
-        if (json.length() > 5000) throw AccountFailure(FailureKind.INVALID_RESPONSE)
-        return (0 until json.length()).map { index ->
-            val item = json.optJSONObject(index) ?: throw AccountFailure(FailureKind.INVALID_RESPONSE)
-            text(item, "category_name", 200) ?: throw AccountFailure(FailureKind.INVALID_RESPONSE)
-        }.distinct()
     }
 
     private fun count(json: JSONObject, key: String): Int? = json.opt(key)?.toString()?.toIntOrNull()?.takeIf { it >= 0 }

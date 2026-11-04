@@ -1,6 +1,5 @@
 package net.extremeiptv.account.data
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
@@ -11,7 +10,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -43,26 +41,13 @@ internal class ServiceAccountClient(
         if (credentials.username.isBlank() || credentials.username.length > 256 ||
             credentials.password.isBlank() || credentials.password.length > 512) throw AccountFailure(FailureKind.INVALID_INPUT)
         val response = request(Request.Builder().url(accountUrl(credentials)))
-        val account = parse { AccountParser.account(JSONObject(response.body), credentials.username, response.date) }
-        if (account.status != ServiceStatus.ACTIVE) return account.copy(
-            categoryWarning = "Channel groups are unavailable while the service is expired.")
-        return try {
-            val categories = request(Request.Builder().url(accountUrl(credentials, "get_live_categories")), 1024 * 1024)
-            account.copy(categories = parse { AccountParser.categories(JSONArray(categories.body)) })
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: AccountFailure) {
-            // An authorization failure must never leave a usable account in the UI.
-            if (failure.kind in setOf(FailureKind.UNAUTHORIZED, FailureKind.RESTRICTED)) throw failure
-            account.copy(categoryWarning = "Account verified, but channel groups could not be loaded. Refresh to retry.")
-        }
+        return parse { AccountParser.account(JSONObject(response.body), credentials.username, response.date) }
     }
 
-    private fun accountUrl(credentials: ServiceCredentials, action: String? = null): HttpUrl =
+    private fun accountUrl(credentials: ServiceCredentials): HttpUrl =
         provider.newBuilder().addPathSegment("player_api.php")
             .addQueryParameter("username", credentials.username)
-            .addQueryParameter("password", credentials.password)
-            .apply { if (action != null) addQueryParameter("action", action) }.build()
+            .addQueryParameter("password", credentials.password).build()
 
     private class Payload(val body: String, val date: String?)
 
