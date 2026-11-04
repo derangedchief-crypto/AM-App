@@ -315,11 +315,10 @@ private fun SignIn(onSignIn: () -> Unit) {
 
 @Composable internal fun Brand() {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Surface(color = Ink, shape = RoundedCornerShape(12.dp)) {
-            Image(painterResource(R.drawable.ic_launcher), contentDescription = "AM", modifier = Modifier.size(48.dp))
-        }
-        Spacer(Modifier.width(10.dp))
-        Text("ACCOUNT MANAGER", color = White, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
+        Image(painterResource(R.drawable.ic_my_tv_logo), contentDescription = null, modifier = Modifier.size(48.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("My ", color = White, fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
+        Text("TV", color = Lime, fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
     }
 }
 @Composable private fun DemoLabel() { Text("SCREEN PREVIEW  /  DEMO DATA", color = Amber, fontSize = 10.sp, letterSpacing = 1.5.sp) }

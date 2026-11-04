@@ -103,7 +103,7 @@ private fun LiveSignIn(state: LiveAccountState, onSignIn: (String, String, Strin
         Brand()
         Spacer(Modifier.height(4.dp))
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Welcome to AM.", color = White, fontSize = 32.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
+            Text("Welcome to My TV.", color = White, fontSize = 32.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
             Text("Your service, simply managed.", color = Muted, fontSize = 15.sp)
         }
         BoxCard {
@@ -164,7 +164,7 @@ private fun LiveSignIn(state: LiveAccountState, onSignIn: (String, String, Strin
         }
         if (help) BoxCard {
             Text("Your reseller can help", fontWeight = FontWeight.SemiBold)
-            Hint("Use your Hub activation code or the service username and password supplied by your reseller. Ask them to enable AM access if you cannot sign in.")
+            Hint("Use your Hub activation code or the service username and password supplied by your reseller. Ask them to enable My TV access if you cannot sign in.")
             Hint("Signing out removes the saved login from this device.")
         }
         }
@@ -337,7 +337,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                     Heading("Your bills,\nall in one place.", "A clear record of payments and renewals.")
                     Choices(listOf("All", "Complete", "Pending"), billFilter) { billFilter = it }
                     val orders = state.orders.filter { billFilter == "All" || (it.complete == (billFilter == "Complete")) }
-                    if (orders.isEmpty()) BoxCard { Hint("No ${if (billFilter == "All") "" else billFilter.lowercase() + " "}AM orders yet. New renewal orders appear here.") }
+                    if (orders.isEmpty()) BoxCard { Hint("No ${if (billFilter == "All") "" else billFilter.lowercase() + " "}My TV orders yet. New renewal orders appear here.") }
                     orders.groupBy { DateTimeFormatter.ofPattern("MMMM yyyy").withZone(ZoneId.systemDefault()).format(Instant.ofEpochSecond(it.createdAt)) }.forEach { (month, entries) ->
                         Text(month, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                         entries.forEach { order -> OrderActivity(order) { invoiceId = order.id; tab = "Invoice" } }
@@ -377,7 +377,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
             }
         }
     }
-    if (showLogout) AlertDialog(onDismissRequest = { showLogout = false }, title = { Text("Sign out of AM Account?") },
+    if (showLogout) AlertDialog(onDismissRequest = { showLogout = false }, title = { Text("Sign out of My TV?") },
         text = { Text("Your saved login will be removed from this device. Your Hub login is unaffected.") },
         confirmButton = { TextButton(onClick = { showLogout = false; signOut() }) { Text("Sign out") } },
         dismissButton = { TextButton(onClick = { showLogout = false }) { Text("Cancel") } })
@@ -417,7 +417,7 @@ private fun BouquetEditor(account: ServiceAccount, busy: Boolean, message: Strin
         }
     }
     if (account.canEditBouquets) Button(enabled = !busy, onClick = { confirm = true }, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) { Text("Save bouquets · Free") }
-    else Hint("Your reseller has not enabled bouquet editing for this service. Ask them to enable it in AM customer permissions.")
+    else Hint("Your reseller has not enabled bouquet editing for this service. Ask them to enable it in My TV customer permissions.")
     message?.let { Hint(it) }
     if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("Save bouquet selection?") },
         text = { Text(if (selected.isEmpty()) "Remove all selected bouquets? You will have no bouquet channel access until you add some again. No charge."
@@ -430,7 +430,7 @@ private fun BouquetEditor(account: ServiceAccount, busy: Boolean, message: Strin
 private fun RenewalOptions(account: ServiceAccount, disabled: Boolean, quote: (RenewalOffer) -> Unit) = BoxCard {
     Label("SUBSCRIPTION LENGTH")
     if (account.renewalMode == "sandbox") Hint("Sandbox mode: test payments only; your service will not be renewed.")
-    if (account.offers.isEmpty()) Hint(account.renewalUnavailableMessage ?: "No renewal option is currently available. Refresh your account. Your reseller can check the exact reason on the AM management page.")
+    if (account.offers.isEmpty()) Hint(account.renewalUnavailableMessage ?: "No renewal option is currently available. Refresh your account. Your reseller can check the exact reason on the My TV management page.")
     account.offers.forEach { offer ->
         Text("${offer.duration} ${offer.period} · ${offer.connections} connection(s)")
         Button(onClick = { quote(offer) }, enabled = !disabled, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) { Text("Review renewal · ${offer.price}") }

@@ -1,4 +1,4 @@
-# AM App
+# My TV
 
 Universal Android customer account-management app for participating resellers and their customers.
 
@@ -54,9 +54,9 @@ Current checkout requires an approved branded package and an expired service. A 
 
 ## Status
 
-Version **0.4.2: cleaner sign-in**. A readable welcome heading, compact sign-in card, activation-code/service-login controls and expandable help replace the crowded login layout. Default text contrast on dark backgrounds is corrected. Accurate active connections, limited-time reseller deals, bouquet editing and current-package renewal remain available.
+Version **0.4.3: My TV branding**. The app is now called **My TV**, with the approved lime TV-and-play logo on the launcher and throughout the app. Adaptive and themed launcher icons use the same symbol. The existing application ID and signing identity are retained for in-place updates. [Logo source files](docs/branding/) are included.
 
-[Download the 0.4.2 APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.4.2-login-design/AM-Account-0.4.2-login-design-test.apk). This login redesign requires only the APK when upgrading from 0.4.1. Application ID/signing remain compatible with earlier test builds.
+[Download the My TV 0.4.3 APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.4.3-my-tv/My-TV-0.4.3-test.apk). This branding update requires only the APK. Existing saved logins and reseller-specific service names are preserved.
 
 Login, bouquet/package reads, renewal offers, confirmation, Square browser checkout, status recovery and new order history are connected in code. Production mode requires server-verified captured payment before fulfilment; sandbox never renews. Service changes are reseller-only. Downloads/updates open GitHub Releases; silent/automatic APK installation is not implemented. Live device and production-payment acceptance remain deployment checks.
 
@@ -82,7 +82,7 @@ Requires JDK 17 and Android SDK 36. Set `ANDROID_HOME` or create an ignored `loc
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Open **AM Account** after deployment and reseller opt-in, using an approved customer's Hub activation code or service username/password. The app uses application ID `net.extremeiptv.account`; the original `.demo` APK can coexist. After successful verification, the original login is encrypted with AES-256-GCM and an app-specific Android Keystore key in app-private, no-backup storage. A code login saves the code, not the password returned by code resolution. AM bearer tokens stay in memory. Raw secrets are not logged or saved in UI state/backups.
+Open **My TV** after deployment and reseller opt-in, using an approved customer's Hub activation code or service username/password. The app uses application ID `net.extremeiptv.account`; the original `.demo` APK can coexist. After successful verification, the original login is encrypted with AES-256-GCM and an app-specific Android Keystore key in app-private, no-backup storage. A code login saves the code, not the password returned by code resolution. AM bearer tokens stay in memory. Raw secrets are not logged or saved in UI state/backups.
 
 On restart the app verifies the saved login before showing account data. A temporary outage preserves it and offers retry. Sign-out deletes the encrypted file and its key; revoked credentials are also removed. The account snapshot itself remains memory-only. A background/foreground transition refreshes the account. After updating from 0.2.0, sign in once to create the saved login.
 
