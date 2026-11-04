@@ -27,7 +27,7 @@ Universal Android customer account-management app for participating resellers an
 
 Use the owner's `derangedchief-crypto/Reseller-website` as the reference for package, bouquet, renewal, and connection-management functions. AM owns its copies/implementations; the reseller site and existing workers remain separate. See [`docs/reseller-worker-reference.md`](docs/reseller-worker-reference.md) for traced endpoints, known schema, and remaining deployment inputs. The live APK shows a bouquet setup-pending state until this backend is connected; category mapping is no longer needed.
 
-The owner approved reusing the existing reseller worker through a separate AM customer API hosted alongside the reseller website, and adding a reseller-facing AM App control section. Preserve existing site behavior and worker contracts; introduce the new section additively. [`server/README.md`](server/README.md) documents the hosting checks and deployment boundary; the customer API and reseller control section are not deployed yet. See [`docs/multi-reseller-integration.md`](docs/multi-reseller-integration.md) for the updated architecture.
+The owner approved reusing the existing reseller worker through a separate AM customer API hosted alongside the reseller website, and adding a hidden reseller-facing AM App control page at `/am-app/`. The settings-only page and automatic aaPanel installer are implemented in [`server/`](server/README.md); live installation is pending. Customer APIs and financial/service actions remain unconnected. See [`docs/multi-reseller-integration.md`](docs/multi-reseller-integration.md) for the architecture.
 
 ## Billing reference for future integration
 

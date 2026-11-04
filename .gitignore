@@ -13,3 +13,9 @@ keystore.properties
 *.iml
 *.apk
 *.aab
+__pycache__/
+server/panel/settings-config.php
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm

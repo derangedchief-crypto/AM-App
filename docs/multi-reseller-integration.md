@@ -4,7 +4,7 @@
 
 The owner now wants one universal AM app for **any participating reseller**, superseding the original owner-only scope. A new reseller-panel section will let each reseller enable customer management and configure their own billing/renewal flow. This is not automatic access for every line: the owning reseller must enable participation.
 
-The existing reseller worker is shared. AM owns its customer API, customer sessions, and module-specific settings/storage. The reseller panel may receive the requested new section and necessary navigation integration, while its existing behavior, sessions, and functions must remain intact. Hub remains unchanged. Existing worker behavior must not be silently modified.
+The existing reseller worker is shared. AM owns its customer API, customer sessions, and module-specific settings/storage. The requested page is hidden at `/am-app/` with no navigation entry for now, using the existing reseller login. Existing behavior, sessions, and functions must remain intact. Hub remains unchanged. Existing worker behavior must not be silently modified.
 
 ## Hosting facts supplied by the owner
 
