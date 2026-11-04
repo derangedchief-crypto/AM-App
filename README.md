@@ -54,9 +54,9 @@ Current checkout requires an approved branded package and an expired service. A 
 
 ## Status
 
-Version **0.3.3: precise renewal availability**. The app now explains the actual reason a renewal option is unavailable instead of labeling every failure as an unenabled price. The reseller page includes a service-specific renewal check. Reversible package/full-catalogue unlimited bouquet editing and reseller service branding remain available.
+Version **0.3.4: connected screen design**. The connected app follows the layouts in `docs/screens.html`: subscription/status card, two-column home summary, activity rows, dedicated bouquet editing and renewal screens, full-page renewal review, and separate invoice details. Real connection/expiry data replaces the preview's fictional credit balance. Reseller service branding, reversible bouquet editing and precise renewal availability remain available.
 
-[Download the 0.3.3 APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.3.3-renewal-availability/AM-Account-0.3.3-renewal-availability-test.apk). Update the website for the new renewal explanations and diagnostic. No worker update is needed when upgrading from 0.3.2. Application ID/signing remain compatible with earlier test builds.
+[Download the 0.3.4 APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.3.4-screen-design/AM-Account-0.3.4-screen-design-test.apk). This layout update requires only the APK when upgrading from 0.3.3. Application ID/signing remain compatible with earlier test builds.
 
 Login, bouquet/package reads, renewal offers, confirmation, Square browser checkout, status recovery and new order history are connected in code. Production mode requires server-verified captured payment before fulfilment; sandbox never renews. Service changes are reseller-only. Downloads/updates open GitHub Releases; silent/automatic APK installation is not implemented. Live device and production-payment acceptance remain deployment checks.
 

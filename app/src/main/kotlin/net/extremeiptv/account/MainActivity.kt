@@ -346,7 +346,7 @@ private fun SignIn(onSignIn: () -> Unit) {
         if (onManage != null) TextButton(onClick = onManage, contentPadding = PaddingValues(0.dp)) { Text("Manage service  →", color = Lime) }
     }
 }
-@Composable private fun Stat(label: String, value: String, caption: String, modifier: Modifier) {
+@Composable internal fun Stat(label: String, value: String, caption: String, modifier: Modifier) {
     Surface(modifier = modifier, shape = RoundedCornerShape(18.dp), color = Panel) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Text(label, color = Muted, fontSize = 9.sp, letterSpacing = 1.sp)
@@ -383,7 +383,7 @@ private fun SignIn(onSignIn: () -> Unit) {
         TextButton(onClick = onClick) { Text(action, fontSize = 12.sp) }
     }
 }
-@Composable private fun ActivityRow(title: String, subtitle: String, amount: String, status: String, onClick: () -> Unit) {
+@Composable internal fun ActivityRow(title: String, subtitle: String, amount: String, status: String, onClick: () -> Unit) {
     Surface(onClick = onClick, color = Panel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
