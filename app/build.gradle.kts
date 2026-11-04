@@ -11,8 +11,8 @@ android {
         applicationId = "net.extremeiptv.account"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.3.5-clean-home"
+        versionCode = 11
+        versionName = "0.3.6-clean-cards"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
