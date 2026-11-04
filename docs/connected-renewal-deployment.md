@@ -1,5 +1,11 @@
 # Bouquet editing, renewals and promotions — 0.4.1
 
+## Reseller package names
+
+Update the Website host with `python3 server/update-panel.py`. In **Packages & prices**, expand a package, enter **Customer-facing package name** (for example Premium), and select **Save package name**. This form saves independently of the price form. Blank restores the original name. Search matches both original and custom names.
+
+Names apply to that reseller's customers on that package, across currencies. They appear in account package details, renewal offers, Deals, new renewal reviews and new order history. The reseller's service brand remains separate. Existing quotes and orders retain their recorded name; future ones use the latest name. Global package names, duration, connections, wholesale credits, retail price revisions and catalogue fingerprints are unchanged. The existing app reads these names after Refresh account; no APK or worker update is required. Names are stored in the private settings database and included in normal backups.
+
 ## Active connections
 
 Version 0.4.1 needs an Auth-worker host update (`python3 server/worker/deploy.py`) and the new APK. The website passes the worker's service details through unchanged; no additional website update is needed from 0.4.0. The installer recognizes the previously released AM module and preserves existing reseller routes.

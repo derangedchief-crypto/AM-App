@@ -21,6 +21,7 @@ final class PricingStore
         if (!is_file($path)) throw new \RuntimeException('Settings database is not installed.');
         $db = new \PDO('sqlite:' . $path, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
         $db->exec('CREATE TABLE IF NOT EXISTS am_package_prices (reseller_id TEXT NOT NULL, package_id INTEGER NOT NULL, currency TEXT NOT NULL, amount_minor INTEGER NOT NULL, enabled INTEGER NOT NULL, revision INTEGER NOT NULL, package_fingerprint TEXT NOT NULL, package_snapshot TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(reseller_id,package_id,currency))');
+        $db->exec('CREATE TABLE IF NOT EXISTS am_package_names (reseller_id TEXT NOT NULL,package_id INTEGER NOT NULL,display_name TEXT NOT NULL,revision INTEGER NOT NULL,PRIMARY KEY(reseller_id,package_id))');
     }
 
     public static function catalogue(array $reply): array
@@ -57,6 +58,38 @@ final class PricingStore
         $out = [];
         foreach ($q->fetchAll(\PDO::FETCH_ASSOC) as $row) $out[$row['package_id'] . ':' . $row['currency']] = $row;
         return $out;
+    }
+
+    public function names(string $reseller): array
+    {
+        $q=$this->db->prepare('SELECT package_id,display_name,revision FROM am_package_names WHERE reseller_id=?');
+        $q->execute([$reseller]); $out=[];
+        foreach ($q->fetchAll(\PDO::FETCH_ASSOC) as $row) $out[(int)$row['package_id']]=$row;
+        return $out;
+    }
+
+    public function displayName(string $reseller, int $package, string $fallback): string
+    {
+        $name=$this->names($reseller)[$package]['display_name'] ?? '';
+        return $name!=='' ? $name : $fallback;
+    }
+
+    public function saveName(string $reseller, array $input, array $catalogue): void
+    {
+        foreach (['package_id','display_name','revision'] as $field)
+            if (!is_string($input[$field] ?? null)) throw new \InvalidArgumentException('Invalid package name field.');
+        if (!preg_match('/^[1-9][0-9]{0,9}$/D',$input['package_id']) || !preg_match('/^[0-9]{1,9}$/D',$input['revision'])) throw new \InvalidArgumentException('Invalid package reference.');
+        $package=(int)$input['package_id']; $revision=(int)$input['revision']; $name=trim($input['display_name']);
+        if (!isset($catalogue[$package])) throw new \InvalidArgumentException('This package is not offered to your reseller account.');
+        if (preg_match('//u',$name)!==1 || preg_match('/[\x00-\x1f\x7f]/u',$name) || preg_match_all('/./us',$name)>120) throw new \InvalidArgumentException('Use a package name of at most 120 characters without control characters.');
+        $this->db->beginTransaction();
+        try {
+            $current=$this->names($reseller)[$package] ?? null;
+            if ((int)($current['revision'] ?? 0)!==$revision) throw new Conflict('This package name changed in another tab. Reload before saving.');
+            $this->db->prepare('INSERT INTO am_package_names VALUES (?,?,?,?) ON CONFLICT(reseller_id,package_id) DO UPDATE SET display_name=excluded.display_name,revision=excluded.revision')
+                ->execute([$reseller,$package,$name,$revision+1]);
+            $this->db->commit();
+        } catch (\Throwable $e) { if ($this->db->inTransaction()) $this->db->rollBack(); throw $e; }
     }
 
     public function save(string $reseller, array $input, array $catalogue): void

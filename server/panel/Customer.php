@@ -118,6 +118,9 @@ final class CustomerService
     public function account(array $ctx): array
     {
         $line = $ctx['line']; unset($line['line_fingerprint']);
+        $names=$this->prices->names($ctx['reseller']);
+        $packageName=static fn(int $id, string $fallback): string => ($names[$id]['display_name'] ?? '') !== '' ? $names[$id]['display_name'] : $fallback;
+        if (($names[(int)($line['package_id'] ?? 0)]['display_name'] ?? '') !== '') $line['package_name']=$names[(int)$line['package_id']]['display_name'];
         $offers = []; $reasons = []; $catalogue = $this->catalogue($ctx['reseller']);
         $rows = array_filter($this->prices->rows($ctx['reseller']),fn($row)=>(int)$row['package_id'] === ($line['package_id'] ?? null));
         try {
@@ -129,7 +132,7 @@ final class CustomerService
                 $p = $this->authorizeRenewal($ctx,(int)$row['package_id'],$catalogue);
                 $q = $this->prices->quote($ctx['reseller'],(int)$row['package_id'],$row['currency'],$catalogue);
                 if ($q['amount_minor'] > 0) $this->merchants->forCheckout($ctx['reseller'],$ctx['settings']['square_mode'],$row['currency']);
-                $offers[] = ['package_id'=>$p['id'],'name'=>$p['name'],'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],'max_connections'=>$p['max_connections'],'currency'=>$q['currency'],'amount_minor'=>$q['amount_minor']];
+                $offers[] = ['package_id'=>$p['id'],'name'=>$packageName($p['id'],$p['name']),'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],'max_connections'=>$p['max_connections'],'currency'=>$q['currency'],'amount_minor'=>$q['amount_minor']];
             } catch (CustomerError | \InvalidArgumentException $error) { $reasons[] = $error->getMessage(); }
         }
         $deals=[];
@@ -142,7 +145,7 @@ final class CustomerService
                 if ((int)$deal['amount_minor']>0) $this->merchants->forCheckout($ctx['reseller'],$ctx['settings']['square_mode'],$deal['currency']);
                 $deals[]=['promo_id'=>$deal['id'],'title'=>$deal['title'],'description'=>$deal['description'],
                     'banner_url'=>$this->config['public_url'].'/promo-banner.php?id='.$deal['id'],'ends_at'=>(int)$deal['ends'],
-                    'package_id'=>$p['id'],'name'=>$p['name'],'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],
+                    'package_id'=>$p['id'],'name'=>$packageName($p['id'],$p['name']),'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],
                     'max_connections'=>$p['max_connections'],'currency'=>$deal['currency'],'amount_minor'=>(int)$deal['amount_minor'],'normal_amount_minor'=>$base['amount_minor']];
             } catch (CustomerError | \InvalidArgumentException $e) { /* Only eligible, currently redeemable promotions are customer-facing. */ }
         }
@@ -186,6 +189,7 @@ final class CustomerService
         $quoted = PricingStore::catalogue(['ok'=>true,'packages'=>[$q['package']]])[$package] ?? null;
         if (!$quoted || $quoted['fingerprint'] !== $p['fingerprint']) throw new CustomerError(409,'Package changed. Refresh renewal options.');
         $mode = $ctx['settings']['square_mode'];
+        $displayName=$this->prices->displayName($ctx['reseller'],$package,$p['name']);
         $c = $price['amount_minor'] > 0 ? $this->merchants->forCheckout($ctx['reseller'],$mode,$currency) : null;
         $id = bin2hex(random_bytes(16));
         $request = ['reseller_id'=>$ctx['reseller'],'line_id'=>$ctx['line']['line_id'],'package_id'=>$package,
@@ -194,11 +198,11 @@ final class CustomerService
         $this->query('DELETE FROM am_promo_quotes WHERE quote_id NOT IN (SELECT id FROM am_customer_quotes)');
         $this->db->beginTransaction();
         try {
-            $this->query('INSERT INTO am_customer_quotes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',[$id,$ctx['reseller'],$ctx['line']['line_id'],$ctx['auth_revision'],$package,$currency,$price['amount_minor'],$price['price_revision'],$c['id'] ?? null,$mode,json_encode($request,JSON_THROW_ON_ERROR),$p['name'],min(time()+900,(int)($promo['ends'] ?? PHP_INT_MAX))]);
+            $this->query('INSERT INTO am_customer_quotes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',[$id,$ctx['reseller'],$ctx['line']['line_id'],$ctx['auth_revision'],$package,$currency,$price['amount_minor'],$price['price_revision'],$c['id'] ?? null,$mode,json_encode($request,JSON_THROW_ON_ERROR),$displayName,min(time()+900,(int)($promo['ends'] ?? PHP_INT_MAX))]);
             if ($promo) $this->query('INSERT INTO am_promo_quotes VALUES (?,?,?)',[$id,$promo['id'],$promo['revision']]);
             $this->db->commit();
         } catch (\Throwable $e) { if ($this->db->inTransaction()) $this->db->rollBack(); throw $e; }
-        return ['quote_id'=>$id,'package_name'=>$p['name'],'amount_minor'=>$price['amount_minor'],'currency'=>$currency,'mode'=>$mode,'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],'max_connections'=>$p['max_connections'],'receipt_label'=>'Payment','promo_title'=>$promo['title'] ?? null];
+        return ['quote_id'=>$id,'package_name'=>$displayName,'amount_minor'=>$price['amount_minor'],'currency'=>$currency,'mode'=>$mode,'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],'max_connections'=>$p['max_connections'],'receipt_label'=>'Payment','promo_title'=>$promo['title'] ?? null];
     }
 
     private function order(string $reseller, string $line, string $id): array

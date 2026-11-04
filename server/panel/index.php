@@ -47,6 +47,12 @@ try {
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         csrf_check();
         $action = $_POST['action'] ?? 'settings';
+        if ($action === 'package_name') {
+            $catalogue=\AmAccount\PricingStore::catalogue(call_auth_worker('/packages',['username'=>$reseller['username']]));
+            (new \AmAccount\PricingStore($config['database']))->saveName($resellerId,$_POST,$catalogue);
+            $_SESSION['am_package_name_saved']=$resellerId;
+            header('Location: '.url('am-app/?'.http_build_query($viewQuery).'#pricing'),true,303); exit;
+        }
         if ($action === 'promotion_save' || $action === 'promotion_disable') {
             $promotions = new \AmAccount\Promotions($config['database']);
             if ($action === 'promotion_disable') {
@@ -146,16 +152,19 @@ unset($_SESSION['am_settings_saved']);
 $squareSaved = ($_SESSION['am_square_saved'] ?? null) === $resellerId;
 unset($_SESSION['am_square_saved']);
 $priceSaved = ($_SESSION['am_price_saved'] ?? null) === $resellerId;
+$packageNameSaved = ($_SESSION['am_package_name_saved'] ?? null) === $resellerId;
+unset($_SESSION['am_package_name_saved']);
 $promoSaved = ($_SESSION['am_promo_saved'] ?? null) === $resellerId;
 unset($_SESSION['am_promo_saved']);
 unset($_SESSION['am_price_saved']);
-$pricingError = null; $catalogue = []; $prices = [];
+$pricingError = null; $catalogue = []; $prices = []; $packageNames = [];
 $priceCurrency = $_GET['prices_currency'] ?? $settings['currency'];
 if (!is_string($priceCurrency) || !in_array($priceCurrency, ['CAD', 'USD'], true)) $priceCurrency = $settings['currency'];
 try {
     if (!$ready) throw new RuntimeException('Storage unavailable.');
     $catalogue = \AmAccount\PricingStore::catalogue(call_auth_worker('/packages', ['username' => $reseller['username']]));
     $prices = (new \AmAccount\PricingStore($config['database']))->rows($resellerId);
+    $packageNames = (new \AmAccount\PricingStore($config['database']))->names($resellerId);
 } catch (Throwable $error) { $pricingError = 'Package pricing could not be loaded. Check the AM update and worker connection, then reload. Square setup remains separate below.'; }
 function am_checked(bool $value): string { return $value ? ' checked' : ''; }
 function am_selected(string $value, string $expected): string { return $value === $expected ? ' selected' : ''; }
@@ -174,8 +183,8 @@ $connectionFilter = $viewQuery['connections'] ?? '';
 $termFilter = $viewQuery['term'] ?? '';
 $statusFilter = $viewQuery['price_status'] ?? '';
 $sort = $viewQuery['sort'] ?? 'name';
-$filteredPackages = array_values(array_filter($catalogue, static function ($p) use ($query,$connectionFilter,$termFilter,$statusFilter,$packageStates) {
-    return ($query === '' || stripos($p['name'] . ' #' . $p['id'],$query) !== false)
+$filteredPackages = array_values(array_filter($catalogue, static function ($p) use ($query,$connectionFilter,$termFilter,$statusFilter,$packageStates,$packageNames) {
+    return ($query === '' || stripos($p['name'] . ' #' . $p['id'] . ' ' . ($packageNames[$p['id']]['display_name'] ?? ''),$query) !== false)
         && ($connectionFilter === '' || (string)$p['max_connections'] === $connectionFilter)
         && ($termFilter === '' || trim((string)($p['duration'] ?? '') . ' ' . (string)($p['duration_period'] ?? '')) === $termFilter)
         && ($statusFilter === '' || $packageStates[$p['id']] === $statusFilter);
@@ -192,7 +201,7 @@ $pricingUrl = url('am-app/?' . http_build_query($viewQuery) . '#pricing');
 $statusLabels = ['enabled'=>'Enabled','disabled'=>'Disabled','unset'=>'Not priced','review'=>'Needs review'];
 $initialSection = isset($_GET['square_return']) ? 'square' : ($saved ? 'settings' : 'pricing');
 if (isset($action) && is_string($action)) $initialSection = match ($action) {
-    'promotion_save','promotion_disable'=>'promotions', 'package_price'=>'pricing', 'customer_access'=>'customer-access', 'renewal_diagnostic'=>'renewal-check', 'customer_retry'=>'customer-orders',
+    'promotion_save','promotion_disable'=>'promotions', 'package_name','package_price'=>'pricing', 'customer_access'=>'customer-access', 'renewal_diagnostic'=>'renewal-check', 'customer_retry'=>'customer-orders',
     'square_connect','square_webhook','square_checkout','square_refresh'=>'square', default=>'settings'
 };
 ?>
@@ -258,6 +267,7 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <?php if ($errorMessage): ?><div class="flash error" role="alert"><?= e($errorMessage) ?></div><?php endif; ?>
 <?php if ($squareSaved): ?><div class="flash success" role="status">Square operation completed. Check the connection and verified test status below.</div><?php endif; ?>
 <?php if ($priceSaved): ?><div class="flash success" role="status">Your customer renewal price was saved. General renewal permission and billing settings are saved separately with Save AM settings.</div><?php endif; ?>
+<?php if ($packageNameSaved): ?><div class="flash success" role="status">Customer-facing package name saved for your customers. Refresh the app to see it.</div><?php endif; ?>
 <?php if ($promoSaved): ?><div class="flash success" role="status">Promotion saved. Only eligible customers see active deals during the sale window.</div><?php endif; ?>
 <?php if (isset($_GET['square_return'])): ?><div class="am-notice">Returned from Square. Use <strong>Check payment with Square</strong> below. Returning here does not confirm payment.</div><?php endif; ?>
 <form id="settings" data-am-section method="post" action="<?= e(url('am-app/#settings')) ?>">
@@ -329,8 +339,8 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <?php elseif (!$catalogue): ?><p>No packages are currently offered to this reseller account.</p>
 <?php elseif (!$visiblePackages): ?><p class="am-empty">No packages match these filters. Try a different name, connection count or duration.</p>
 <?php else: ?><div class="am-package-list"><?php foreach ($visiblePackages as $package): $price = $prices[$package['id'] . ':' . $priceCurrency] ?? null; $status = $packageStates[$package['id']]; ?>
-<details class="am-package"<?= $errorMessage && ($action ?? '') === 'package_price' && (string)($_POST['package_id'] ?? '') === (string)$package['id'] ? ' open' : '' ?>>
-<summary><span><strong><?= e($package['name']) ?></strong><small>#<?= $package['id'] ?> · <?= e((string)($package['duration'] ?? '')) ?> <?= e((string)($package['duration_period'] ?? '')) ?> · <?= $package['max_connections'] ?> connections · <?= e($package['price_credits']) ?> wholesale credits</small></span><span class="am-price-badge" data-status="<?= e($status) ?>"><?= $price ? e(number_format((int)$price['amount_minor']/100,2,'.','').' '.$priceCurrency) : '—' ?><small><?= e($statusLabels[$status]) ?></small></span></summary>
+<details class="am-package"<?= $errorMessage && in_array($action ?? '',['package_price','package_name'],true) && (string)($_POST['package_id'] ?? '') === (string)$package['id'] ? ' open' : '' ?>>
+<summary><span><strong><?= e($package['name']) ?></strong><?php if (($packageNames[$package['id']]['display_name'] ?? '') !== ''): ?><small>Customer name: <?= e($packageNames[$package['id']]['display_name']) ?></small><?php endif; ?><small>#<?= $package['id'] ?> · <?= e((string)($package['duration'] ?? '')) ?> <?= e((string)($package['duration_period'] ?? '')) ?> · <?= $package['max_connections'] ?> connections · <?= e($package['price_credits']) ?> wholesale credits</small></span><span class="am-price-badge" data-status="<?= e($status) ?>"><?= $price ? e(number_format((int)$price['amount_minor']/100,2,'.','').' '.$priceCurrency) : '—' ?><small><?= e($statusLabels[$status]) ?></small></span></summary>
 <form class="am-price" method="post" action="<?= e($pricingUrl) ?>">
 <?= csrf_field() ?><input type="hidden" name="action" value="package_price"><input type="hidden" name="package_id" value="<?= $package['id'] ?>"><input type="hidden" name="currency" value="<?= e($priceCurrency) ?>"><input type="hidden" name="revision" value="<?= (int)($price['revision'] ?? 0) ?>"><input type="hidden" name="fingerprint" value="<?= e($package['fingerprint']) ?>">
 <h3><?= e($package['name']) ?></h3>
@@ -341,7 +351,12 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <label class="am-switch"><input type="checkbox" name="enabled" value="1"<?= am_checked($price && (int)$price['enabled'] === 1) ?>><span>Offer this package for customer renewal</span></label>
 <button class="btn btn-primary" type="submit">Save package price</button>
 <a class="btn" href="<?= e(url('am-app/?promo_package='.$package['id'].'&prices_currency='.$priceCurrency.'#promotions')) ?>">Create deal for this package</a>
-</form></details>
+</form>
+<form class="am-alias" style="padding:18px;border-top:1px solid var(--border)" method="post" action="<?= e($pricingUrl) ?>">
+<?= csrf_field() ?><input type="hidden" name="action" value="package_name"><input type="hidden" name="package_id" value="<?= $package['id'] ?>"><input type="hidden" name="revision" value="<?= (int)($packageNames[$package['id']]['revision'] ?? 0) ?>">
+<label class="am-field"><span>Customer-facing package name</span><input type="text" name="display_name" maxlength="120" placeholder="e.g. Premium" value="<?= e($packageNames[$package['id']]['display_name'] ?? '') ?>"></label>
+<p class="am-muted">Shown to your customers in the app, renewal reviews and deals. Applies across currencies. Leave blank to use the original package name. Package details and prices stay the same.</p>
+<button class="btn" type="submit">Save package name</button></form></details>
 <?php endforeach; ?></div>
 <nav class="am-pager" aria-label="Package pages">
 <?php if ($page > 1): ?><a class="btn" href="<?= e(url('am-app/?'.http_build_query(array_merge($viewQuery,['page'=>$page-1])).'#pricing')) ?>">← Previous</a><?php endif; ?>

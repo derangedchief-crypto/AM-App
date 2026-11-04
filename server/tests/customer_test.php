@@ -195,6 +195,23 @@ try {
     check($complete['amount_minor']===500 && $complete['state']==='applied' && $attempts===3,'Existing paid promo order keeps price after withdrawal');
     check($service->checkout($ctx,$q['quote_id'])['id']===$order['id'] && $attempts===3,'Promo checkout replay is idempotent');
     check($service->quote($ctx,1,'CAD')['amount_minor']===725,'Future normal renewal uses normal price');
+    $prices=new PricingStore($config['database']); $beforePrices=$prices->rows('1');
+    $prices->saveName('1',['package_id'=>'1','display_name'=>'Premium','revision'=>'0'],$catalogue);
+    $prices->saveName('2',['package_id'=>'1','display_name'=>'Other brand','revision'=>'0'],$catalogue);
+    check($prices->displayName('1',1,'Monthly')==='Premium' && $prices->displayName('2',1,'Monthly')==='Other brand','Names are tenant scoped');
+    $view=$service->account($ctx);
+    check($view['service']['package_name']==='Premium' && $view['offers'][0]['name']==='Premium','Account and renewal names customized');
+    $input['revision']='5'; $promos->save('1',$input,$catalogue,null);
+    check($service->account($ctx)['deals'][0]['name']==='Premium','Deals use customer package name');
+    $namedQuote=$service->quote($ctx,1,'CAD');
+    check($namedQuote['package_name']==='Premium' && $namedQuote['amount_minor']===725 && $namedQuote['max_connections']===2,'Quote name only changes presentation');
+    $reject(fn()=>$prices->saveName('1',['package_id'=>'1','display_name'=>'Stale edit','revision'=>'0'],$catalogue));
+    $reject(fn()=>$prices->saveName('1',['package_id'=>'999','display_name'=>'Invalid','revision'=>'0'],$catalogue));
+    $reject(fn()=>$prices->saveName('1',['package_id'=>'1','display_name'=>str_repeat('a',121),'revision'=>'1'],$catalogue));
+    $prices->saveName('1',['package_id'=>'1','display_name'=>'  ','revision'=>'1'],$catalogue);
+    check($prices->displayName('1',1,'Monthly')==='Monthly','Blank restores original package name');
+    check($prices->rows('1')===$beforePrices,'Renaming leaves all price revisions, fingerprints and credits unchanged');
+    check($db->query("SELECT package_name FROM am_customer_quotes WHERE id='".$namedQuote['quote_id']."'")->fetchColumn()==='Premium','Existing quote retains its name snapshot');
     echo "Customer access, billing gates, sandbox isolation, order recovery and promotion eligibility/expiry/payment tests passed.\n";
 } finally {
     foreach (glob($root.'/*') as $file) unlink($file); rmdir($root);
