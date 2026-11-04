@@ -54,9 +54,9 @@ Current checkout requires an approved branded package and an expired service. A 
 
 ## Status
 
-Version **0.4.0: limited-time reseller deals**. Resellers can link a promotional banner and discounted price to an existing package, set a UTC sale window, preview the promotion and disable it. The app's Deals screen shows active eligible promotions for the customer's current package and hides expired deals automatically. Checkout verifies promotion eligibility and price on the server. Future renewals use normal prices; wholesale credits are unchanged.
+Version **0.4.1: accurate active connections**. Home now shows connections in use separately from the allowed limit. The AM worker counts open sessions from the same connection records used by the reseller panel. Missing usage is shown as unavailable, never zero. Limited-time reseller deals, reversible bouquet editing and current-package renewal remain available.
 
-[Download the 0.4.0 APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.4.0-promotions/AM-Account-0.4.0-promotions-test.apk). Update the website with `server/update-panel.py`, then install the APK. No worker update is required from 0.3.2 or later. Application ID/signing remain compatible with earlier test builds.
+[Download the 0.4.1 APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.4.1-active-connections/AM-Account-0.4.1-active-connections-test.apk). Upgrade the Auth-worker host using `server/worker/deploy.py`, then install the APK. The 0.4.0 website already passes through connection counts and needs no additional update for this fix. Application ID/signing remain compatible with earlier test builds.
 
 Login, bouquet/package reads, renewal offers, confirmation, Square browser checkout, status recovery and new order history are connected in code. Production mode requires server-verified captured payment before fulfilment; sandbox never renews. Service changes are reseller-only. Downloads/updates open GitHub Releases; silent/automatic APK installation is not implemented. Live device and production-payment acceptance remain deployment checks.
 

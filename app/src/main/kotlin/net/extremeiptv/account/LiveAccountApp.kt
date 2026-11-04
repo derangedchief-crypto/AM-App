@@ -217,8 +217,8 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                     Heading("Everything,\nin your control.", "Your service. Your way.")
                     LiveServiceCard(account)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Stat("CONNECTIONS", account.maxConnections?.toString() ?: "—",
-                            "${account.activeConnections?.toString() ?: "—"} currently connected", Modifier.weight(1f))
+                        Stat("CONNECTIONS IN USE", account.activeConnections?.toString() ?: "—",
+                            "${if (account.activeConnections == null) "Usage unavailable · " else ""}Limit: ${account.maxConnections?.toString() ?: "—"}", Modifier.weight(1f))
                         Stat("EXPIRES ON", if (account.unlimited) "Unlimited" else account.expiresAt?.let {
                             DateTimeFormatter.ofPattern("MMM dd").withZone(ZoneId.systemDefault()).format(Instant.ofEpochSecond(it))
                         } ?: "—", if (account.unlimited) "No expiry date" else account.expiryText(), Modifier.weight(1f))
@@ -240,6 +240,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                         Detail("Status", account.status.label)
                         Detail("Expires", account.expiryText())
                         Detail("Connections", account.maxConnections?.toString() ?: "Not provided")
+                        Detail("Connections in use", account.activeConnections?.toString() ?: "Unavailable")
                         Detail("Channel selections", account.bouquets.joinToString(" + ").ifBlank { "None selected" })
                     }
                     Primary("Modify service") { tab = "Modify" }

@@ -8,6 +8,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ManagedAccountClientTest {
+    @Test fun `active usage remains distinct from connection limit and unknown is not zero`() = runBlocking {
+        for (count in listOf(null, JSONObject.NULL, 0, 1, 3, -1)) {
+            MockWebServer().use { server ->
+                server.start(); val client = ManagedAccountClient(server.url("/customer-api.php"))
+                val data = JSONObject(account())
+                data.getJSONObject("service").put("max_connections", 150)
+                data.put("offers", org.json.JSONArray())
+                if (count != null) data.getJSONObject("service").put("active_connections", count)
+                server.reply(JSONObject().put("ok",true).put("token","b".repeat(64)).put("account",data).toString())
+                val result = client.readAccount(ServiceCredentials("customer","secret"))
+                assertEquals(150, result.maxConnections)
+                assertEquals((count as? Int)?.takeIf { it >= 0 }, result.activeConnections)
+            }
+        }
+    }
     @Test fun `deals use owned banners and send only promo reference for server pricing`() = runBlocking {
         MockWebServer().use { server ->
             server.start(); val client = ManagedAccountClient(server.url("/customer-api.php"))

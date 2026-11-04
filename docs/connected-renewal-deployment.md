@@ -1,4 +1,10 @@
-# Bouquet editing, renewals and promotions — 0.4.0
+# Bouquet editing, renewals and promotions — 0.4.1
+
+## Active connections
+
+Version 0.4.1 needs an Auth-worker host update (`python3 server/worker/deploy.py`) and the new APK. The website passes the worker's service details through unchanged; no additional website update is needed from 0.4.0. The installer recognizes the previously released AM module and preserves existing reseller routes.
+
+The worker counts `connections` rows with `closed=0`, joined to the authorized customer and reseller, matching the reseller panel's online-session definition. Only the count is returned, never IPs or device/session details. Usage does not affect auth, bouquet or renewal fingerprints. A failed telemetry read returns null; old workers also lack this field. Both cases display unavailable rather than zero. Home shows connections in use with the allowed limit below, and Services includes usage separately. Counts are snapshots refreshed on account refresh or app resume, with the last updated time in the app; they are not a continuous connection feed.
 
 ## Limited-time promotions
 

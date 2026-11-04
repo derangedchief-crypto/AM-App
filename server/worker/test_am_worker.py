@@ -63,6 +63,7 @@ class WorkerTest(unittest.TestCase):
                 CREATE TABLE users_packages (id INTEGER PRIMARY KEY,package_name TEXT,credits TEXT,duration INTEGER,duration_period TEXT,duration_value INTEGER,max_connections INTEGER,bouquets TEXT,groups TEXT,type INTEGER,enabled INTEGER,activated INTEGER);
                 CREATE TABLE customers (id INTEGER PRIMARY KEY,member_id INTEGER,username TEXT,password TEXT,activation_code TEXT,package_id INTEGER,max_connections INTEGER,exp_date INTEGER,activated INTEGER,is_trial INTEGER,enabled INTEGER,bouquet TEXT,duration INTEGER,duration_period TEXT,duration_value INTEGER,updated TEXT);
                 CREATE TABLE bouquets (id INTEGER PRIMARY KEY,bouquet_name TEXT);
+                CREATE TABLE connections (activity_id INTEGER PRIMARY KEY,user_id INTEGER,closed INTEGER);
                 CREATE TABLE users_credits_log (user_id TEXT,amount TEXT,balance_before TEXT,balance_after TEXT,reason TEXT,actor_id TEXT,ref_type TEXT,ref_id TEXT,note TEXT,created_at INTEGER);
                 CREATE TABLE portal_trial_renewals (customer_id INTEGER PRIMARY KEY,renewals_used INTEGER,converted_to_paid INTEGER);
                 CREATE TABLE am_renewal_results (order_id TEXT PRIMARY KEY,reseller_id INTEGER,line_id INTEGER,request_hash TEXT,result_json TEXT,refreshed INTEGER,created_at INTEGER);
@@ -93,6 +94,28 @@ class WorkerTest(unittest.TestCase):
         self.service = Service(self.w)
 
     def tearDown(self): self.temp.cleanup()
+
+    def test_active_connections_match_panel_and_do_not_affect_revisions(self):
+        with self.cursor() as (cur, _):
+            owner = self.service.owner(cur, '1')
+            line = self.service.line(cur, owner, '10')
+            before = self.service.customer_view(cur, owner, line)
+            self.assertEqual(before['line']['active_connections'], 0)
+        self.change('INSERT INTO connections VALUES (1,10,0),(2,10,1),(3,999,0)')
+        with self.cursor() as (cur, _):
+            view = self.service.customer_view(cur, owner, line)
+            self.assertEqual(view['line']['active_connections'], 1)
+            self.assertEqual(view['line']['max_connections'], 2)
+            self.assertEqual(view['auth_revision'], before['auth_revision'])
+            self.assertEqual(view['line']['line_fingerprint'], before['line']['line_fingerprint'])
+            self.assertEqual(view['line']['bouquet_revision'], before['line']['bouquet_revision'])
+            self.assertEqual(self.service.customer_view(cur, {'id':2,'username':'seller2'}, line)['line']['active_connections'], 0)
+        self.change('UPDATE connections SET closed=1 WHERE activity_id=1')
+        with self.cursor() as (cur, _):
+            self.assertEqual(self.service.customer_view(cur, owner, line)['line']['active_connections'], 0)
+        self.change('DROP TABLE connections')
+        with self.cursor() as (cur, _):
+            self.assertIsNone(self.service.customer_view(cur, owner, line)['line']['active_connections'])
 
     @contextmanager
     def cursor(self, autocommit=True):

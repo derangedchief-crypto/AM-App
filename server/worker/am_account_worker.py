@@ -174,6 +174,17 @@ class Service:
         names = {int(row["id"]): str(row["bouquet_name"]) for row in cur.fetchall()}
         if unlimited(line):
             allowed = sorted(names)
+        # Match the reseller panel's online-session definition, scoped to this
+        # already authorized customer. Never expose IPs or session/device data.
+        active_connections = None
+        try:
+            cur.execute("SELECT COUNT(*) AS active_connections FROM connections c "
+                        "JOIN customers cu ON cu.id=c.user_id "
+                        "WHERE cu.id=%s AND cu.member_id=%s AND c.closed=0", (line['id'], owner['id']))
+            active_connections = int(cur.fetchone()['active_connections'])
+        except Exception:
+            # Usage telemetry failure must not fabricate zero or block account access.
+            pass
         revision = hmac.new(self.w["settings"].shared_secret.encode(),
                             ("am-auth-revision:" + json.dumps([line.get(key) for key in ("id", "member_id", "username", "password", "activation_code")], separators=(",", ":"))).encode(), hashlib.sha256).hexdigest()
         return {"ok": True, "reseller_id": str(owner["id"]), "reseller_username": owner["username"], "auth_revision": revision,
@@ -181,6 +192,7 @@ class Service:
                          "package_id": int(line["package_id"]) if line.get("package_id") else None,
                          "package_name": package.get("package_name") if package else None,
                          "max_connections": int(line.get("max_connections") or 1),
+                         "active_connections": active_connections,
                          "expire_at": int(line.get("exp_date") or 0), "activated": bool(line.get("activated")),
                          "is_trial": bool(line.get("is_trial")), "line_fingerprint": line_fingerprint(line),
                          "bouquet_revision": bouquet_revision(line, package, allowed),

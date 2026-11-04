@@ -131,7 +131,9 @@ internal class ManagedAccountClient(
         return ServiceAccount(username = line.getString("username"),
             status = if (expiry > 0 && expiry <= json.getLong("server_time")) ServiceStatus.EXPIRED else ServiceStatus.ACTIVE,
             expiresAt = expiry.takeIf { it > 0 }, unlimited = expiry == 0L && line.getBoolean("activated"),
-            maxConnections = line.getInt("max_connections"), activeConnections = null, trial = line.getBoolean("is_trial"),
+            maxConnections = line.getInt("max_connections"), activeConnections =
+                (line.opt("active_connections") as? Number)?.toLong()?.takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt(),
+            trial = line.getBoolean("is_trial"),
             packageName = if (line.isNull("package_name")) null else line.getString("package_name"), createdAt = null,
             providerName = json.getString("provider"), supportEmail = json.getString("support_email"),
             renewalUnavailableMessage = if (json.isNull("renewal_unavailable_message")) null else json.getString("renewal_unavailable_message").take(2000),

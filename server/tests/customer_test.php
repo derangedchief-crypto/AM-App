@@ -12,7 +12,7 @@ $config=['database'=>"$root/settings.sqlite",'secret_key'=>"$root/gateway.key",'
 $revision='auth-one'; $renewals=[]; $attempts=0; $lost=false;
 $package=['id'=>1,'name'=>'Monthly','price_credits'=>'3.5','duration'=>30,'duration_period'=>'days','duration_hours'=>720,'max_connections'=>2,'package_type'=>'0','worker_fingerprint'=>str_repeat('b',64)];
 $worker=function($route,$body) use (&$revision,&$renewals,&$attempts,&$lost,$package) {
-    $line=['line_id'=>'10','package_id'=>1,'max_connections'=>2,'username'=>'customer','line_fingerprint'=>str_repeat('a',64)];
+    $line=['line_id'=>'10','package_id'=>1,'max_connections'=>2,'active_connections'=>1,'username'=>'customer','line_fingerprint'=>str_repeat('a',64)];
     if ($route==='/am/customer-auth' && ($body['password']??'')!=='secret') return ['ok'=>false];
     if (in_array($route,['/am/customer','/am/customer-auth'],true)) {
         if (isset($body['line_id']) && ($body['line_id']!=='10'||$body['reseller_id']!=='1')) return ['ok'=>false];
@@ -67,6 +67,7 @@ try {
     (new PricingStore($config['database']))->save('1',['package_id'=>'1','currency'=>'CAD','amount'=>'0','revision'=>'0','fingerprint'=>$catalogue[1]['fingerprint'],'enabled'=>'1'],$catalogue);
     $login=$service->login(['username'=>'customer','password'=>'secret'],'fixture');
     $ctx=$service->session($login['token']); check(count($login['account']['offers'])===1,'Offer available');
+    check($login['account']['service']['active_connections']===1 && $login['account']['service']['max_connections']===2,'Live usage passes through separately from limit');
     check($service->account($ctx)['renewal_unavailable_message']===null,'Available offer has no false blocker');
     foreach ([['allow_renewals',false,'general customer renewal permission'],['billing_mode','none','Integrated billing'],['gateways',[],'Square is not selected']] as [$field,$value,$expected]) {
         $blocked=$ctx; $blocked['settings'][$field]=$value;
