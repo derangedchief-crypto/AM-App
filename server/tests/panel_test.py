@@ -31,6 +31,11 @@ function call_auth_worker($route, $body) {
         return ['ok'=>true,'packages'=>[['id'=>(int)$_SESSION['reseller']['id'],'name'=>'Fixture package','price_credits'=>'3.50','max_connections'=>2,'duration'=>1,'duration_period'=>'months']]];
     }
     if ($route === '/packages' && $body['username'] === $_SESSION['reseller']['username']) {
+        if (!empty($_SESSION['many'])) {
+            $packages = [];
+            for ($i=1;$i<=37;$i++) $packages[] = ['id'=>$i,'name'=>($i===37 ? '<script>unsafe</script>' : 'Package '.$i),'price_credits'=>(string)$i,'max_connections'=>$i%3+1,'duration'=>$i%2+1,'duration_period'=>'months'];
+            return ['ok'=>true,'packages'=>$packages];
+        }
         return ['ok' => true, 'packages' => [['id' => (int)$_SESSION['reseller']['id'], 'name' => 'Fixture package', 'price_credits' => '3.50', 'max_connections' => 2, 'duration' => 1, 'duration_period' => 'months']]];
     }
     if ($route !== '/panel-user-balance' || $body['panel_user_id'] !== $_SESSION['reseller']['id']) throw new Exception('Wrong scope');
@@ -55,6 +60,7 @@ session_start(); $_SESSION = [];
 if (isset($_GET['user'])) $_SESSION['reseller'] = ['id' => $_GET['user'], 'username' => 'Fixture reseller'];
 $_SESSION['active'] = ($_GET['active'] ?? '1') === '1';
 $_SESSION['outage'] = isset($_GET['outage']);
+$_SESSION['many'] = isset($_GET['many']);
 if (isset($_GET['staff'])) $_SESSION['portal_staff'] = ['id' => 1];
 if (isset($_GET['impersonation'])) $_SESSION['impersonation'] = ['id' => 1];
 '''
@@ -169,10 +175,32 @@ def run():
             assert connection.execute('SELECT reseller_id, revision FROM am_reseller_settings ORDER BY reseller_id').fetchall() == [('1', 1), ('2', 1)]
             assert connection.execute('SELECT COUNT(*) FROM am_settings_audit').fetchone()[0] == 2
             connection.close()
+            login('user=1&many=1')
+            body = request('/am-app/?sort=name')[1]
+            assert body.count('class="am-package"') == 12
+            assert 'Page 1 of 4' in body
+            assert request('/am-app/?page=999')[1].count('class="am-package"') == 1
+            assert 'Page 1 of 4' in request('/am-app/?page=-1')[1]
+            filtered = request('/am-app/?connections=2&term=2+months')[1]
+            assert filtered.count('class="am-package"') == 7
+            assert 'No packages match' in request('/am-app/?q=missing-package')[1]
+            assert '&lt;script&gt;unsafe&lt;/script&gt;' in request('/am-app/?q=unsafe')[1]
+            assert '<script>unsafe</script>' not in request('/am-app/?q=unsafe')[1]
+            assert request('/am-app/?price_status=unset')[1].count('class="am-package"') == 12
+            path = '/am-app/?q=Package+20&connections=3&prices_currency=USD&sort=credits'
+            body = request(path)[1]
+            price_fields = {key: re.search('name="'+key+'" value="([^"]*)"',body).group(1) for key in ['csrf','package_id','fingerprint']}
+            saved_price = request(path, {**price_fields,'action':'package_price','revision':'0','currency':'USD','amount':'12.50','enabled':'1'})
+            assert saved_price[0] == 303, saved_price
+            assert 'q=Package+20' in saved_price[2]['Location'] and 'connections=3' in saved_price[2]['Location']
+            assert '12.50 USD' in request('/am-app/?price_status=enabled&prices_currency=USD')[1]
+            assert request('/am-app/?price_status=enabled&prices_currency=USD')[1].count('class="am-package"') == 1
+            if os.environ.get('AM_BROWSER_TEST'):
+                subprocess.run(['node',str(SOURCE / 'tests/panel_browser_test.cjs'),f'http://127.0.0.1:{port}'],check=True)
             db.unlink()
             assert request()[0] == 503
             assert 'fieldset disabled' in request()[1]
-            print('PASS: login, CSRF, active state, worker outage, staff/impersonation denial, validation, escaping, tenant isolation, revisions, persistence, audit, storage failure.')
+            print('PASS: panel access/security, persistence, catalogue pagination, combined filters, price save context, currency isolation and storage failure.')
         finally:
             process.terminate()
             process.wait(timeout=5)

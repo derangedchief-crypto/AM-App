@@ -1,0 +1,54 @@
+// Run via AM_BROWSER_TEST=1 PHP=... python3 server/tests/panel_test.py.
+// Playwright is optional; AM_PLAYWRIGHT_MODULE can point to a local installation.
+const { chromium } = require(process.env.AM_PLAYWRIGHT_MODULE || 'playwright');
+const assert = require('node:assert/strict');
+(async () => {
+  const browser = await chromium.launch({headless:true, args:['--no-sandbox']});
+  try {
+    const page = await browser.newPage({viewport:{width:1280,height:960}});
+    const errors=[];
+    page.on('pageerror', error=>errors.push(error.message));
+    await page.goto(process.argv[2]+'/fixture.php?user=1&many=1');
+    await page.goto(process.argv[2]+'/am-app/#pricing');
+    assert.equal(await page.locator('[data-am-section]:visible').count(),1);
+    assert.equal(await page.locator('.am-package').count(),12);
+    await page.locator('.am-package summary').first().click();
+    assert.equal(await page.locator('.am-price:visible').count(),1);
+    await page.locator('input[name=q]').fill('Package 20');
+    await page.getByRole('button',{name:'Apply filters',exact:true}).click();
+    assert.equal(await page.locator('.am-package').count(),1);
+    await page.locator('.am-package summary').click();
+    await page.locator('.am-price input[name=amount]').fill('15.75');
+    await page.getByRole('button',{name:'Save package price',exact:true}).click();
+    assert.equal(await page.locator('input[name=q]').inputValue(),'Package 20');
+    assert.match(await page.locator('.am-package summary').innerText(),/15.75 CAD/);
+    await page.locator('[data-am-link=settings]').click();
+    await page.locator('input[name=display_name]').fill('Unsaved name');
+    await page.locator('[data-am-link=square]').click();
+    assert.equal(await page.locator('#square').isVisible(),true);
+    await page.goBack();
+    assert.equal(await page.locator('input[name=display_name]').inputValue(),'Unsaved name');
+    await page.getByRole('link',{name:'Packages & prices',exact:true}).click();
+    await page.getByRole('link',{name:'Clear filters',exact:true}).click();
+    await page.getByRole('link',{name:'Next →',exact:true}).click();
+    assert.match(await page.locator('.am-pager').innerText(),/Page 2 of 4/);
+    await page.setViewportSize({width:390,height:844});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    assert.equal(await page.locator('.am-nav a').evaluateAll(links=>links.every(link=>link.getBoundingClientRect().width>130)),true);
+    // The fixture has no portal stylesheet: provide representative light/dark tokens for visual checks.
+    await page.addStyleTag({content:`:root{--text:#172033;--text-muted:#607087;--card:#fff;--border:#dce2ea;--muted-bg:#f3f5f8;--accent:#8295ed;--bg:#111827}body{margin:0;background:#f3f5f8;font:14px system-ui}.card{border:1px solid var(--border);border-radius:12px;background:var(--card)}input,select,.btn{box-sizing:border-box;padding:10px;border:1px solid var(--border);border-radius:8px;font:inherit}.btn{text-decoration:none;color:var(--text);background:var(--card)}`});
+    await page.screenshot({path:'/tmp/opencode/am-panel-mobile.png',fullPage:true});
+    await page.setViewportSize({width:1280,height:960});
+    await page.screenshot({path:'/tmp/opencode/am-panel-desktop.png',fullPage:true});
+    await page.addStyleTag({content:':root{--text:#e8edf5;--text-muted:#9caac0;--card:#182131;--border:#334057;--muted-bg:#101827}body{background:#101827}'});
+    await page.screenshot({path:'/tmp/opencode/am-panel-dark.png',fullPage:true});
+    assert.deepEqual(errors,[]);
+    const noJs=await browser.newPage({javaScriptEnabled:false});
+    await noJs.goto(process.argv[2]+'/fixture.php?user=1&many=1');
+    await noJs.goto(process.argv[2]+'/am-app/?q=Package+20#pricing');
+    assert.equal(await noJs.locator('.am-package').count(),1);
+    await noJs.locator('.am-package summary').click();
+    assert.equal(await noJs.locator('.am-price').isVisible(),true);
+    console.log('PASS: browser sections, history, draft retention, filter/save flow, pagination, mobile width, no-JS fallback.');
+  } finally { await browser.close(); }
+})().catch(error=>{console.error(error);process.exit(1);});

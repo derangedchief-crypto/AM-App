@@ -1,5 +1,11 @@
 # Bouquet editing and connected renewal deployment — 0.3.3
 
+## Management layout update
+
+The AM management page now has separate Packages & prices, App settings, Customer access, Renewal check, Orders and Square setup sections. Package pricing is the default view. Search by name or ID, filter by connection count, duration, price status and currency, and sort by name, connection count or wholesale credits. Results are paginated on the server (12 packages per page). Expand a package row to edit its price; saves preserve the current filters and page. Status counts apply to the selected currency and distinguish enabled, disabled, unpriced and changed packages needing review.
+
+Settings and price saves remain separate. Switching sections retains unsaved fields on the current page; navigating to another result page or applying filters reloads the page. Without JavaScript, all sections remain accessible and package search, filtering, paging and editing still work. Orders and merchant connections use expandable details. Install with `python3 server/update-panel.py`; no worker or APK update is required for this website layout change.
+
 This release connects Android → AM PHP customer API → additive signed `/am/*` worker contracts. Customers can edit permitted bouquets for free and renew their current package. Package/connection changes require the reseller. Existing reseller endpoints and Hub remain unchanged.
 
 ## Upgrade from 0.3.0
