@@ -6,7 +6,7 @@ The owner supplied `derangedchief-crypto/Reseller-website` as the reference for 
 
 The owner simplified the required AM hierarchy to **customer's package → assigned/available bouquets**, without displaying categories. Bouquet selection changes channel access. Category mapping is no longer a prerequisite.
 
-AM must own its implementation and deployment. Do not modify the reseller website, its existing workers, or Hub. Their code is a reference. This investigation made no live worker requests or panel writes.
+AM owns its customer-facing API. The owner has now approved hosting it alongside the reseller website and reusing the existing reseller worker, provided the site remains intact. Do not modify existing website/worker/Hub code or overwrite their configuration. This investigation made no live worker requests or panel writes.
 
 ## Confirmed repository contracts
 
@@ -57,8 +57,8 @@ The current package-change UI describes charging the positive package credit-pri
 
 1. Obtain the current deployed worker source/configuration context through private server access. Inspect schema/read paths without modifying the existing service.
 2. Confirm package and assigned/available bouquet read paths against that deployed version. No category lookup is required.
-3. Deploy a separate AM service with its own configuration, credentials, customer sessions, and dedicated port/hostname. It can share the host if the owner chooses, but must not overwrite or restart the existing worker.
+3. Deploy an isolated AM customer API alongside the reseller website, reusing its existing worker server-to-server. Keep AM configuration/session storage separate and do not overwrite or restart the worker. See `server/README.md` for the read-only hosting preflight.
 4. Return the current package and bouquet IDs/names/selection state to AM Android. Keep unavailable data explicit; do not replace it with sample records.
 5. Add customer-scoped bouquet edits with package validation, concurrency handling, audit, and native refresh, before adding paid package/connection changes.
 
-Needed from the owner now: the server/current worker folder and private access, plus the intended AM service hostname or confirmation to host AM separately on the same machine. No database password or worker secret should be pasted into public source/issues.
+Needed from the owner now: run the read-only hosting inventory in the reseller website host's aaPanel terminal and return its output. Hosting alongside the reseller site and reuse of its worker are approved. No database password or worker secret should be pasted into public source/issues.

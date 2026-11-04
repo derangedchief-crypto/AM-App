@@ -25,6 +25,8 @@ Android customer account-management project for the owner's customers.
 
 Use the owner's `derangedchief-crypto/Reseller-website` as the reference for package, bouquet, renewal, and connection-management functions. AM owns its copies/implementations; the reseller site and existing workers remain separate. See [`docs/reseller-worker-reference.md`](docs/reseller-worker-reference.md) for traced endpoints, known schema, and remaining deployment inputs. The live APK shows a bouquet setup-pending state until this backend is connected; category mapping is no longer needed.
 
+The owner approved reusing the existing reseller worker through a separate AM customer API hosted alongside the reseller website. Preserve the existing site and worker. [`server/README.md`](server/README.md) documents the read-only hosting inventory and deployment boundary; the customer API is not deployed yet.
+
 ## Billing reference for future integration
 
 Reference: `derangedchief-crypto/ARVIO`, branch `main`.
