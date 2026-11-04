@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace AmAccount;
+require_once __DIR__.'/Licenses.php';
 
 final class CustomerError extends \RuntimeException
 {
@@ -16,6 +17,7 @@ final class CustomerService
     private SettingsStore $settings;
     private PricingStore $prices;
     private Promotions $promotions;
+    private Licenses $licenses;
 
     public function __construct(private array $config, private \Closure $transport, private Square $square)
     {
@@ -28,10 +30,12 @@ final class CustomerService
         $this->settings = new SettingsStore($config['database']);
         $this->prices = new PricingStore($config['database']);
         $this->promotions = new Promotions($config['database']);
+        $this->licenses = new Licenses($config['database']);
     }
 
     public static function migrate(string $path): void
     {
+        Licenses::migrate($path);
         if (!is_file($path)) throw new \RuntimeException('Settings not installed.');
         $db = new \PDO('sqlite:' . $path, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
         $db->beginTransaction();
@@ -59,8 +63,15 @@ final class CustomerService
         if ((int)$this->one('SELECT hits FROM am_customer_limits WHERE bucket=?',[$bucket])['hits'] > $max) throw new CustomerError(429,'Too many requests. Try again in a few minutes.');
     }
 
-    private function context(string $reseller, string $line, ?string $revision = null): array
+    private function licensed(string $reseller): void
     {
+        try { $this->licenses->requireActive($reseller); }
+        catch (LicenseDenied $e) { throw new CustomerError(403,$e->getMessage()); }
+    }
+
+    private function context(string $reseller, string $line, ?string $revision = null, bool $reconcileExistingOrder = false): array
+    {
+        if (!$reconcileExistingOrder) $this->licensed($reseller);
         $s = $this->settings->read($reseller)['settings'];
         $access = $this->one('SELECT enabled FROM am_customer_access WHERE reseller_id=? AND line_id=?',[$reseller,$line]);
         if (!$s['app_enabled'] || ($access && (int)$access['enabled'] === 0) || ($s['customer_policy'] !== 'all' && (int)($access['enabled'] ?? 0) !== 1)) throw new CustomerError(403,'Your provider has not enabled AM access for this service.');
@@ -117,6 +128,7 @@ final class CustomerService
 
     public function account(array $ctx): array
     {
+        $this->licensed($ctx['reseller']);
         $line = $ctx['line']; unset($line['line_fingerprint']);
         $names=$this->prices->names($ctx['reseller']);
         $packageName=static fn(int $id, string $fallback): string => ($names[$id]['display_name'] ?? '') !== '' ? $names[$id]['display_name'] : $fallback;
@@ -167,6 +179,7 @@ final class CustomerService
 
     public function bouquets(array $ctx, array $input): array
     {
+        $this->licensed($ctx['reseller']);
         if (!$ctx['settings']['allow_bouquets']) throw new CustomerError(403,'Your reseller has not enabled bouquet editing.');
         $ids = $input['bouquet_ids'] ?? null; $revision = $input['revision'] ?? null;
         if (!is_array($ids) || !array_is_list($ids) || count($ids)>2000 || !is_string($revision) || !preg_match('/^[a-f0-9]{64}$/D',$revision)) throw new CustomerError(422,'Invalid bouquet selection.');
@@ -180,6 +193,7 @@ final class CustomerService
 
     public function quote(array $ctx, int $package, string $currency, ?string $promoId=null): array
     {
+        $this->licensed($ctx['reseller']);
         if (!in_array($currency,['CAD','USD'],true)) throw new CustomerError(422,'Invalid currency.');
         $catalogue = $this->catalogue($ctx['reseller']); $p = $this->authorizeRenewal($ctx,$package,$catalogue);
         $price = $this->prices->quote($ctx['reseller'],$package,$currency,$catalogue);
@@ -214,6 +228,7 @@ final class CustomerService
 
     public function checkout(array $ctx, string $quote): array
     {
+        $this->licensed($ctx['reseller']);
         $existing = $this->one('SELECT * FROM am_customer_orders WHERE reseller_id=? AND line_id=? AND (quote_id=? OR active_line=?) ORDER BY created_at DESC LIMIT 1',[$ctx['reseller'],$ctx['line']['line_id'],$quote,$ctx['reseller'].':'.$ctx['line']['line_id']]);
         if ($existing) return $this->refresh($existing);
         $q = $this->one('SELECT * FROM am_customer_quotes WHERE id=? AND reseller_id=? AND line_id=? AND expires>?',[$quote,$ctx['reseller'],$ctx['line']['line_id'],time()]);
@@ -282,7 +297,9 @@ final class CustomerService
             $request = json_decode($o['worker_request'],true,32,JSON_THROW_ON_ERROR);
             $result = $this->worker('/am/renew-result',['reseller_id'=>$o['reseller_id'],'order_id'=>$o['id']]);
             if ($result['state'] === 'not_applied') {
-                $ctx = $this->context($o['reseller_id'],$o['line_id'],$o['auth_revision']);
+                // Only this private, already-created and payment-verified order path
+                // bypasses licensing. Ownership, credentials and renewal rules still apply.
+                $ctx = $this->context($o['reseller_id'],$o['line_id'],$o['auth_revision'],true);
                 $this->authorizeRenewal($ctx,(int)$o['package_id'],$this->catalogue($o['reseller_id']));
                 $result = $this->worker('/am/renew',$request);
             }
@@ -295,9 +312,10 @@ final class CustomerService
         return $this->dto($this->order($o['reseller_id'],$o['line_id'],$o['id']));
     }
 
-    public function status(array $ctx, string $id): array { return $this->refresh($this->order($ctx['reseller'],$ctx['line']['line_id'],$id)); }
+    public function status(array $ctx, string $id): array { $this->licensed($ctx['reseller']); return $this->refresh($this->order($ctx['reseller'],$ctx['line']['line_id'],$id)); }
     public function orders(array $ctx): array
     {
+        $this->licensed($ctx['reseller']);
         return array_map(fn($row)=>$this->dto($row),$this->query('SELECT * FROM am_customer_orders WHERE reseller_id=? AND line_id=? ORDER BY created_at DESC,rowid DESC LIMIT 50',[$ctx['reseller'],$ctx['line']['line_id']])->fetchAll(\PDO::FETCH_ASSOC));
     }
 

@@ -1,5 +1,15 @@
 # Bouquet editing, renewals and promotions — 0.4.1
 
+## Reseller licensing and menu links
+
+On the Website host, run `python3 server/update-panel.py` and then `python3 server/install-menus.py` from the same source checkout. The website update adds licensing and immediately requires it for **all resellers, including existing accounts**. No grandfathered grants are generated. The menu installer adds **AM App** in the reseller menu and **AM App licenses** in the administrator Tools menu. It validates the recognized navigation layout, lints staged PHP, keeps private backups and is safe to repeat. If a menu layout is unrecognized it stops without editing those files; the direct admin URL remains available. No worker or APK update is required.
+
+Sign into the existing website administrator account and open `/am-app/licenses-admin.php`. Ordinary reseller sessions, staff sessions and impersonation sessions cannot manage licenses. Enter an active reseller's immutable numeric ID and leave expiry blank for a one-time/no-expiry license. The key is shown once; deliver it privately to that reseller. Keys are random, stored only as hashes in SQLite, tied to the intended reseller and redeemed once. The reseller opens **AM App**, enters the key, and can then access management. Customers must also meet the existing reseller approval and renewal permissions.
+
+**Suspend** blocks access reversibly. **Restore** restores the previous activation state; it does not remove an expired date. **Revoke** permanently invalidates that key. To issue a new key after revocation or loss, generate a replacement for the same reseller and explicitly confirm replacement; the prior key is revoked and activation is required again. Changing expiry can convert an existing permanent license to time-limited access, extend access or remove expiry. Dates are UTC. This is license enforcement, not automatic collection of reseller license fees: monthly payment collection and extension remain manual until billing automation is added.
+
+License state is checked on each management/customer request, including existing sessions. Missing storage fails closed. Blocked AM access does not disable IPTV subscriptions. A customer app may require sign-in again after access is restored. Public marketing banner images and the payment-return landing page are not entitlements. Signed payment webhooks still reconcile already-created orders under their original price and ownership checks, even after suspension/expiry. An admin-only original-order reconciliation tool is provided for webhook recovery; it never creates a new purchase. License activity (issue, activate, replace, suspend, restore, revoke and expiry edits) is audited without recording raw keys. Back up the private database and gateway key together.
+
 ## Reseller package names
 
 Update the Website host with `python3 server/update-panel.py`. In **Packages & prices**, expand a package, enter **Customer-facing package name** (for example Premium), and select **Save package name**. This form saves independently of the price form. Blank restores the original name. Search matches both original and custom names.

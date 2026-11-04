@@ -31,6 +31,7 @@ require_once __DIR__ . '/Settings.php';
 require_once __DIR__ . '/Square.php';
 require_once __DIR__ . '/Pricing.php';
 require_once __DIR__ . '/Customer.php';
+require __DIR__ . '/license-gate.php';
 $errorMessage = null;
 $square = null;
 $squareConnections = [];
@@ -257,7 +258,7 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 </style>
 </head><body>
 <main class="am-page">
-<div class="am-top"><div><div class="am-status">Private preview · hidden from navigation</div><h1>AM App management</h1>
+<div class="am-top"><div><div class="am-status">Licensed reseller access<?= $licenseRow['expires']!==null ? ' · expires '.e(gmdate('Y-m-d H:i',(int)$licenseRow['expires'])).' UTC' : ' · no expiry' ?></div><h1>AM App management</h1>
 <p class="am-muted">Settings for <?= e((string)($reseller['display_name'] ?? $reseller['username'] ?? 'your reseller account')) ?>.</p></div>
 <a class="btn" href="<?= e(url('dashboard.php')) ?>">Back to reseller panel</a></div>
 <nav class="am-nav" aria-label="AM management sections">

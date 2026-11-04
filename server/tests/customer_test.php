@@ -54,6 +54,8 @@ $square=new Square(function($path,$body,$c) use (&$paid,&$external,&$badAmount,&
 });
 try {
     SettingsStore::initialize($config['database']); PricingStore::migrate($config['database']); SquareStore::migrate($config['database']); CustomerService::migrate($config['database']);
+    $licenses=new \AmAccount\Licenses($config['database']); $license=$licenses->issue('1',null); $licenses->redeem('1',$license['key']);
+    $otherLicense=$licenses->issue('2',null); $licenses->redeem('2',$otherLicense['key']);
     file_put_contents($config['secret_key'],random_bytes(32));
     $service=new CustomerService($config,$worker,new Square(fn()=>throw new RuntimeException('Free checkout must not call Square')));
     $settings=new SettingsStore($config['database']); $s=Settings::defaults();
@@ -212,6 +214,21 @@ try {
     check($prices->displayName('1',1,'Monthly')==='Monthly','Blank restores original package name');
     check($prices->rows('1')===$beforePrices,'Renaming leaves all price revisions, fingerprints and credits unchanged');
     check($db->query("SELECT package_name FROM am_customer_quotes WHERE id='".$namedQuote['quote_id']."'")->fetchColumn()==='Premium','Existing quote retains its name snapshot');
+    $paid=false; $pending=$service->checkout($ctx,$service->quote($ctx,1,'CAD')['quote_id']);
+    $l=$licenses->current('1'); $licenses->change($l['id'],(int)$l['revision'],'suspend');
+    denied(fn()=>$service->session($login['token']),403);
+    denied(fn()=>$service->login(['username'=>'customer','password'=>'secret'],'license-fixture'),403);
+    denied(fn()=>$service->account($ctx),403);
+    denied(fn()=>$service->quote($ctx,1,'CAD'),403);
+    denied(fn()=>$service->checkout($ctx,$namedQuote['quote_id']),403);
+    denied(fn()=>$service->bouquets($ctx,['bouquet_ids'=>[],'revision'=>str_repeat('a',64)]),403);
+    denied(fn()=>$service->orders($ctx),403);
+    denied(fn()=>$service->status($ctx,$pending['id']),403);
+    $paid=true; $previousAttempts=$attempts;
+    $service->notification('1',$connection['id'],'sq-'.$pending['id']);
+    check($attempts===$previousAttempts+1 && $service->retryOrder('1',$pending['id'])['state']==='applied','Verified pre-existing payment reconciles despite suspension');
+    $l=$licenses->current('1'); $licenses->change($l['id'],(int)$l['revision'],'restore');
+    check($service->session($login['token'])['reseller']==='1','Restored access verified from existing token');
     echo "Customer access, billing gates, sandbox isolation, order recovery and promotion eligibility/expiry/payment tests passed.\n";
 } finally {
     foreach (glob($root.'/*') as $file) unlink($file); rmdir($root);

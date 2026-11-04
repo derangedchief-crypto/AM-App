@@ -47,6 +47,7 @@ def run():
         $c=require $root.'/am-app/settings-config.php';
         \AmAccount\SettingsStore::initialize($c['database']); \AmAccount\PricingStore::migrate($c['database']);
         \AmAccount\SquareStore::migrate($c['database']); \AmAccount\CustomerService::migrate($c['database']);
+        $licenses=new \AmAccount\Licenses($c['database']); $license=$licenses->issue('1',null); $licenses->redeem('1',$license['key']);
         $s=array_replace(\AmAccount\Settings::defaults(),['app_enabled'=>true,'customer_policy'=>'all','allow_renewals'=>true,'allow_bouquets'=>true,'billing_mode'=>'integrated','gateways'=>['square']]);
         (new \AmAccount\SettingsStore($c['database']))->save('1',0,$s);
         $cat=\AmAccount\PricingStore::catalogue(['ok'=>true,'packages'=>[package_fixture()]]);
@@ -104,6 +105,14 @@ def run():
             assert request({'action':'checkout','quote_id':qid})[1]['order']['id']==order['order']['id']
             assert len(request({'action':'orders'})[1]['orders'])==1
             assert request({'action':'order','order_id':'f'*32})[0]==404
+            import sqlite3
+            for state,expiry in [('suspended',None),('revoked',None),('active',1)]:
+                with sqlite3.connect(root/'state.sqlite') as db:
+                    db.execute('UPDATE am_licenses SET status=?,expires=?',(state,expiry))
+                for payload in [{'action':'account'},{'action':'orders'},{'action':'order','order_id':order['order']['id']},
+                                {'action':'quote','package_id':1,'currency':'CAD'},{'action':'checkout','quote_id':qid},
+                                {'action':'bouquets','bouquet_ids':[],'revision':'c'*64}]:
+                    assert request(payload)[0]==403,payload
             assert request({'action':'logout'})[0]==200
             assert request({'action':'orders'})[0]==401
             print('PASS: customer HTTP login/bearer, validation, forged scope/amount rejection, renewal-only, checkout replay, history, logout.')

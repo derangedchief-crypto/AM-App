@@ -46,6 +46,8 @@ function url($path) {return '/' . ltrim($path, '/');}
 function e($value) {return htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8');}
 function theme_html_attrs() {return '';}
 function theme_head() {return '';}
+function is_local_admin() {return !empty($_SESSION['is_local_admin']);}
+function require_local_admin() {if (!is_local_admin()) {http_response_code(403);exit;}}
 function csrf_field() {
     $_SESSION['csrf'] ??= bin2hex(random_bytes(24));
     return '<input type="hidden" name="csrf" value="'.e($_SESSION['csrf']).'">';
@@ -61,6 +63,7 @@ if (isset($_GET['user'])) $_SESSION['reseller'] = ['id' => $_GET['user'], 'usern
 $_SESSION['active'] = ($_GET['active'] ?? '1') === '1';
 $_SESSION['outage'] = isset($_GET['outage']);
 $_SESSION['many'] = isset($_GET['many']);
+if (isset($_GET['admin'])) $_SESSION['is_local_admin'] = true;
 if (isset($_GET['staff'])) $_SESSION['portal_staff'] = ['id' => 1];
 if (isset($_GET['impersonation'])) $_SESSION['impersonation'] = ['id' => 1];
 '''
@@ -90,6 +93,8 @@ def run():
         (root / 'gateway.key').write_bytes(os.urandom(32))
         subprocess.run([PHP, '-r', 'require $argv[1]; \\AmAccount\\CustomerService::migrate($argv[2]);',
                         str(root / 'am-app/Customer.php'), str(db)], check=True)
+        subprocess.run([PHP, '-r', 'require $argv[1]; $s=new \\AmAccount\\Licenses($argv[2]); foreach (["1","2"] as $id) {$k=$s->issue($id,null);$s->redeem($id,$k["key"]);}',
+                        str(root / 'am-app/Licenses.php'), str(db)], check=True)
         (root / 'am-app/settings-config.php').write_text("<?php return ['database' => " + repr(str(db)) + ", 'secret_key' => " + repr(str(root / 'gateway.key')) + ", 'public_url' => 'https://panel.example.com/am-app'];")
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
@@ -200,9 +205,32 @@ def run():
             assert request('/am-app/?price_status=enabled&prices_currency=USD')[1].count('class="am-package"') == 1
             if os.environ.get('AM_BROWSER_TEST'):
                 subprocess.run(['node',str(SOURCE / 'tests/panel_browser_test.cjs'),f'http://127.0.0.1:{port}'],check=True)
+            login('user=1')
+            assert request('/am-app/licenses-admin.php')[0] == 403
+            for query in ['user=1&admin=1&staff=1','user=1&admin=1&impersonation=1']:
+                login(query)
+                assert request('/am-app/licenses-admin.php')[0] == 403
+            login('user=1&admin=1')
+            admin_path='/am-app/licenses-admin.php'
+            admin_body=request(admin_path)[1]
+            csrf=re.search('name="csrf" value="([^"]*)"',admin_body).group(1)
+            assert request(admin_path,{'action':'issue','reseller_id':'1','expires':''})[0] == 419
+            assert request(admin_path,{'csrf':csrf,'action':'issue','reseller_id':'1','expires':''})[0] == 422
+            assert request(admin_path,{'csrf':csrf,'action':'issue','reseller_id':'1','expires':'','replace':'1'})[0] == 303
+            body=request(admin_path)[1]
+            key=re.search(r'AM-[A-F0-9]{40}',body).group()
+            assert key not in request(admin_path)[1]
+            login('user=1')
+            status,body,_=request()
+            assert status == 403 and 'Activate license' in body and 'Save AM settings' not in body
+            csrf=re.search('name="csrf" value="([^"]*)"',body).group(1)
+            assert request(data={'csrf':csrf,'action':'settings','revision':'1'})[0] == 403
+            assert request(data={'action':'license_activate','license_key':key})[0] == 419
+            assert request(data={'csrf':csrf,'action':'license_activate','license_key':key})[0] == 303
+            assert request()[0] == 200
             db.unlink()
             assert request()[0] == 503
-            assert 'fieldset disabled' in request()[1]
+            assert 'License verification is unavailable' in request()[1]
             print('PASS: panel access/security, persistence, catalogue pagination, combined filters, price save context, currency isolation and storage failure.')
         finally:
             process.terminate()
