@@ -54,7 +54,7 @@ internal fun AccountTheme(content: @Composable () -> Unit) {
         colorScheme = darkColorScheme(primary = Lime, onPrimary = Ink, background = Ink,
             surface = Panel, onSurface = White, onBackground = White,
             onSurfaceVariant = Muted, secondary = Lime, outline = Color(0xFF384657)),
-        content = content
+        content = { androidx.compose.runtime.CompositionLocalProvider(LocalContentColor provides White, content = content) }
     )
 }
 

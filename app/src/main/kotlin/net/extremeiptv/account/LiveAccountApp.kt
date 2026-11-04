@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -23,11 +24,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -80,47 +85,89 @@ private fun LiveSignIn(state: LiveAccountState, onSignIn: (String, String, Strin
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
+    var help by rememberSaveable { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
     val useCode = method == "Activation code"
     val valid = if (useCode) code.matches(Regex("[0-9]{6}")) else username.isNotBlank() && password.isNotBlank()
-    Column(Modifier.fillMaxSize().background(Ink).safeDrawingPadding().imePadding()
-        .verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Brand()
-        Spacer(Modifier.height(12.dp))
-        Heading("Less admin.\nMore living.", "Manage your service, renew in a moment, and keep every bill in one place.")
-        if (!state.busy) Choices(listOf("Activation code", "Username & password"), method) {
-            method = it; code = ""; username = ""; password = ""; visible = false
+    val submit = {
+        if (valid && !state.busy) {
+            focus.clearFocus()
+            onSignIn(code, username, password, useCode)
+            code = ""; password = ""; visible = false
         }
+    }
+    Column(Modifier.fillMaxSize().background(Ink).safeDrawingPadding().imePadding()
+        .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        Column(Modifier.widthIn(max = 440.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        Brand()
+        Spacer(Modifier.height(4.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Welcome to AM.", color = White, fontSize = 32.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
+            Text("Your service, simply managed.", color = Muted, fontSize = 15.sp)
+        }
+        BoxCard {
+        Text("Sign in to your account", fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Activation code" to "Activation code", "Username & password" to "Service login").forEach { (value, label) ->
+                Surface(onClick = {
+                    method = value; code = ""; username = ""; password = ""; visible = false; focus.clearFocus()
+                }, enabled = !state.busy, shape = RoundedCornerShape(12.dp),
+                    color = if (method == value) Lime else Ink, contentColor = if (method == value) Ink else Muted,
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp)
+                        .semantics { selected = method == value }) {
+                    Box(Modifier.padding(horizontal = 8.dp, vertical = 14.dp), contentAlignment = Alignment.Center) {
+                        Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    }
+                }
+            }
+        }
+        Hint(if (useCode) "Enter the 6-digit code from your reseller." else "Use your service username and password.")
         if (useCode) {
             OutlinedTextField(value = code, onValueChange = { code = it.filter { c -> c in '0'..'9' }.take(6) },
-                enabled = !state.busy, label = { Text("Six-digit activation code") }, singleLine = true,
+                enabled = !state.busy, label = { Text("Activation code") }, singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 24.sp, letterSpacing = 7.sp, color = White),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { submit() }),
+                supportingText = { Text("${code.length} of 6 digits", color = Muted) },
                 shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth())
         } else {
             OutlinedTextField(value = username, onValueChange = { username = it.take(256) },
                 enabled = !state.busy, label = { Text("Service username") }, singleLine = true,
-                keyboardOptions = KeyboardOptions(autoCorrect = false),
+                keyboardOptions = KeyboardOptions(autoCorrect = false, imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
                 shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = password, onValueChange = { password = it.take(512) },
                 enabled = !state.busy, label = { Text("Service password") }, singleLine = true,
                 visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                trailingIcon = { TextButton(onClick = { visible = !visible }) { Text(if (visible) "Hide" else "Show") } },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { submit() }),
+                trailingIcon = { TextButton(enabled = !state.busy, onClick = { visible = !visible }) { Text(if (visible) "Hide" else "Show") } },
                 shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth())
         }
         state.error?.let { ErrorNotice(it) }
-        Button(enabled = valid && !state.busy, onClick = {
-            onSignIn(code, username, password, useCode)
-            code = ""; password = ""; visible = false
-        }, modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp), shape = RoundedCornerShape(14.dp)) {
+        Button(enabled = valid && !state.busy, onClick = submit,
+            colors = ButtonDefaults.buttonColors(disabledContainerColor = Lime.copy(alpha = 0.18f), disabledContentColor = Lime.copy(alpha = 0.7f)),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp), shape = RoundedCornerShape(14.dp)) {
             if (state.busy) {
                 CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(12.dp))
             }
             Text(if (state.busy) "Verifying your service…" else "Sign in", fontWeight = FontWeight.Bold)
         }
-        Hint("Use your Hub activation code or service credentials supplied by your reseller.")
-        Hint("Your login is remembered securely on this device. AM verifies it automatically when you reopen the app. Signing out removes the saved login.")
+        Hint("Securely remembered on this device.")
+        }
+        TextButton(onClick = { help = !help }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+            Text(if (help) "Hide sign-in help" else "Need help signing in?", color = Muted)
+        }
+        if (help) BoxCard {
+            Text("Your reseller can help", fontWeight = FontWeight.SemiBold)
+            Hint("Use your Hub activation code or the service username and password supplied by your reseller. Ask them to enable AM access if you cannot sign in.")
+            Hint("Signing out removes the saved login from this device.")
+        }
+        }
     }
 }
 
