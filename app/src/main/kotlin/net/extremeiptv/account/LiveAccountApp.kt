@@ -198,17 +198,11 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                         Hint("Your assigned bouquets will appear here once AM's worker is connected. The current provider login API does not return your bouquet names.")
                     }
                     Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) { Text("Renewal — setup pending") }
-                    OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) { Text("Modify service — setup pending") }
-                    Hint("The first live build reads your service only. Renewals and changes need AM Account's billing and service-management backend.")
+                    Hint("Contact your reseller for package, connection or bouquet changes. AM will only offer renewal of your current package once checkout is connected.")
                 }
                 "Bills" -> {
-                    Heading("Your bills", "Payments, invoices and account credit.")
+                    Heading("Your bills", "Renewal payments and invoices.")
                     BillingUnavailable()
-                    BoxCard {
-                        Label("ACCOUNT CREDIT")
-                        Text("Not connected", fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                        Hint("A credit balance will appear once the billing database is connected. No balance has been assumed.")
-                    }
                     Hint("New transactions will build your history here once billing is enabled.")
                 }
                 "Account" -> {
@@ -217,7 +211,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                         Label("SIGNED IN AS")
                         Text(account.username, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                         Detail("Account status", account.status.label)
-                        Detail("App version", "0.2.1 · Live read-only")
+                        Detail("App version", "0.2.2 · Live read-only")
                         Detail("Login", if (state.remembered) "Remembered on this device" else "Not saved on this device")
                     }
                     Hint("AM Account uses its own login code and session. No Hub settings, devices, profiles or subscriptions are changed by this app.")
@@ -248,7 +242,7 @@ private fun LiveServiceCard(account: ServiceAccount) = BoxCard {
 private fun BillingUnavailable() = BoxCard {
     Label("BILLING SETUP PENDING")
     Text("Your service is connected.\nBilling is next.", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-    Hint("Invoice history, account credits and payment actions need the new billing database. This app has not created or charged an invoice.")
+    Hint("Invoice history and renewal payments need the new billing database. This app has not created or charged an invoice.")
 }
 
 @Composable

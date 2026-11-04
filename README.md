@@ -12,15 +12,15 @@ Universal Android customer account-management app for participating resellers an
 - View services, expiry dates, and past bills.
 - Build bill history from new app transactions in a database the owner will provide; no historical bill import is needed.
 - Renew active or expired services using AM-owned billing functions based on the existing ARVIO flow.
-- Let customers change their package, connections, subscription length, and channel selections, with immediate effect after confirmation and any required verified payment.
-- Credit unused value from downgrades or reduced connections to the customer's account balance. Exact proration rules remain to be defined.
+- Customer checkout is renewal-only for now: renew the current package with its existing connection count. Customers must contact their reseller for package, connection, term or bouquet changes.
+- Self-service modifications, downgrade credits and proration are outside the current release scope.
 - One universal customer app for any participating reseller, rather than a separate APK per reseller.
 - A new **AM App** section in the reseller panel lets each reseller enable customer access and configure their own billing/renewal flow. The earlier owner-only audience is superseded.
 - Determine the customer's owning reseller from verified server-side line ownership, and scope service access, invoices, credit, and checkout to that reseller. Never let Android choose a trusted reseller identity or merchant.
 - Signed APK releases and in-app updates following Extreme Hub's release process.
 - Publish source code in the public AM-App GitHub repository, as requested by the owner.
 - Keep AM's implementation independent. Hub is a reference only: do not modify its app, backend functions, enrollment, settings, or deployment for this project.
-- Show services as package → bouquets, without categories. Adding/removing permitted bouquets changes channel access.
+- Show services as package → bouquets, without categories. Bouquet changes are handled by the reseller.
 - Remember the customer's original login securely across app restarts; explicit sign-out removes it.
 - Each reseller sets its own customer renewal price for every offered package. The worker's fixed package credit cost is still deducted from that reseller on renewal; retail money prices never overwrite wholesale credits. Bouquet selections carry no extra charge.
 
@@ -50,11 +50,13 @@ Current checkout requires an approved branded package and an expired service. A 
 3. Implement early renewal in AM's own billing/fulfilment functions, preserving remaining service time and exactly-once fulfilment. Do not change Hub's eligibility rules or worker deployment.
 4. Build the Android account, services, bills, renewal, and settings screens against those endpoints.
 5. Configure a separate signing key and publish signed APK updates through public GitHub Releases. Keep signing keys, database credentials, payment secrets, and customer data outside the repository; no GitHub access token belongs in the APK.
-6. Implement immediate service modifications with server-calculated quotes and an account-credit ledger. Preserve remaining subscription time; credit unused downgrade/reduced-connection value. Define proration and credit-use rules before implementing financial calculations, and prevent duplicate credits on retries.
+6. Enforce renewal-only customer checkout regardless of legacy reseller change permissions. Direct service-change requests to the customer's reseller; no customer proration or downgrade-credit ledger is required for this release.
 
 ## Status
 
-Version **0.2.1: remembered login and bouquet-only services**. The Android app calls the real service-provider endpoints using its own implementation of the Hub login protocol. It displays only returned account data; the live navigation has no demo-account entry, sample bills, invented package, or assumed credit balance.
+Version **0.2.2: AM branding and renewal-only scope**. Matching uppercase AM artwork appears in the adaptive launcher icon and inside the app. Package changes direct customers to their reseller. This test APK remains read-only: renewal checkout is not connected yet. The Android app calls the real service-provider endpoints using its own implementation of the Hub login protocol. It displays only returned account data; the live navigation has no demo-account entry, sample bills, invented package, or assumed credit balance.
+
+[Download the 0.2.2 test APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.2.2-live-readonly/AM-Account-0.2.2-live-readonly-test.apk). Its signing certificate matches 0.2.1 for an in-place update.
 
 Login and account refresh are connected in code. End-to-end verification with a real customer requires an authorized test account; no customer credentials have been used during development. Billing, payment, service modifications, and automatic APK updates are still pending.
 

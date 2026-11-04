@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -313,8 +315,8 @@ private fun SignIn(onSignIn: () -> Unit) {
 
 @Composable internal fun Brand() {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Surface(color = Lime, shape = RoundedCornerShape(12.dp)) {
-            Text("am", Modifier.padding(horizontal = 10.dp, vertical = 7.dp), color = Ink, fontWeight = FontWeight.Black, fontSize = 22.sp)
+        Surface(color = Ink, shape = RoundedCornerShape(12.dp)) {
+            Image(painterResource(R.drawable.ic_launcher), contentDescription = "AM", modifier = Modifier.size(48.dp))
         }
         Spacer(Modifier.width(10.dp))
         Text("ACCOUNT MANAGER", color = White, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.8.sp)
