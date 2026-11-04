@@ -2,11 +2,13 @@
 
 The owner approved hosting AM's API alongside the reseller website, provided the existing site remains intact. The existing reseller worker will be reused; a separate worker is no longer required.
 
+Updated scope: one universal app for participating resellers, with a new AM App section in the reseller panel for opt-in/customer access and reseller-specific billing/renewals. See `docs/multi-reseller-integration.md`. The latest owner-supplied terminal check confirms PHP 8.4 with cURL, PDO SQLite, OpenSSL, and populated worker connection settings. The original read-only inventory is no longer a prerequisite; current work must establish the customer-to-reseller lookup contract and billing routing model.
+
 Target architecture:
 
 `AM Android → AM customer API → existing reseller worker`
 
-AM owns its customer API, session storage, and customer-scoping logic. Worker shared secrets remain on the server. The Android app must not receive a reseller-wide worker secret or the full reseller line listing. Existing Hub/reseller code and worker contracts are not altered for this integration.
+AM owns its customer API, session storage, and customer-scoping logic. Worker shared secrets remain on the server. The Android app must not receive a reseller-wide worker secret or the full reseller line listing. Hub and shared worker contracts remain unchanged unless a missing contract is separately agreed. The reseller panel will receive the requested additive AM settings section and navigation integration while preserving existing behavior.
 
 ## Current step: identify the hosting layout
 

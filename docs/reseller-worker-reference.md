@@ -6,7 +6,7 @@ The owner supplied `derangedchief-crypto/Reseller-website` as the reference for 
 
 The owner simplified the required AM hierarchy to **customer's package → assigned/available bouquets**, without displaying categories. Bouquet selection changes channel access. Category mapping is no longer a prerequisite.
 
-AM owns its customer-facing API. The owner has now approved hosting it alongside the reseller website and reusing the existing reseller worker, provided the site remains intact. Do not modify existing website/worker/Hub code or overwrite their configuration. This investigation made no live worker requests or panel writes.
+AM owns its customer-facing API. The owner approved hosting it alongside the reseller website, reusing the existing worker, and adding an AM App reseller-settings section for universal participation and reseller-specific billing. Preserve existing website behavior/configuration and worker/Hub code. See `docs/multi-reseller-integration.md` for the expanded scope. This investigation made no live worker requests or panel writes.
 
 ## Confirmed repository contracts
 
@@ -61,4 +61,4 @@ The current package-change UI describes charging the positive package credit-pri
 4. Return the current package and bouquet IDs/names/selection state to AM Android. Keep unavailable data explicit; do not replace it with sample records.
 5. Add customer-scoped bouquet edits with package validation, concurrency handling, audit, and native refresh, before adding paid package/connection changes.
 
-Needed from the owner now: run the read-only hosting inventory in the reseller website host's aaPanel terminal and return its output. Hosting alongside the reseller site and reuse of its worker are approved. No database password or worker secret should be pasted into public source/issues.
+The owner supplied a successful local hosting check: PHP 8.4 has curl, pdo_sqlite and openssl, and worker URL/shared-secret settings are populated. Do not repeat that prerequisite. Next confirm reseller billing-routing mode and the authoritative customer-to-owner lookup contract for universal participation. No database password or worker secret should be pasted into public source/issues.

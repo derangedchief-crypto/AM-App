@@ -1,6 +1,6 @@
 # AM App
 
-Android customer account-management project for the owner's customers.
+Universal Android customer account-management app for participating resellers and their customers.
 
 ## Source of truth
 
@@ -14,7 +14,9 @@ Android customer account-management project for the owner's customers.
 - Renew active or expired services using AM-owned billing functions based on the existing ARVIO flow.
 - Let customers change their package, connections, subscription length, and channel selections, with immediate effect after confirmation and any required verified payment.
 - Credit unused value from downgrades or reduced connections to the customer's account balance. Exact proration rules remain to be defined.
-- One customer app, rather than a reseller-branded app builder.
+- One universal customer app for any participating reseller, rather than a separate APK per reseller.
+- A new **AM App** section in the reseller panel lets each reseller enable customer access and configure their own billing/renewal flow. The earlier owner-only audience is superseded.
+- Determine the customer's owning reseller from verified server-side line ownership, and scope service access, invoices, credit, and checkout to that reseller. Never let Android choose a trusted reseller identity or merchant.
 - Signed APK releases and in-app updates following Extreme Hub's release process.
 - Publish source code in the public AM-App GitHub repository, as requested by the owner.
 - Keep AM's implementation independent. Hub is a reference only: do not modify its app, backend functions, enrollment, settings, or deployment for this project.
@@ -25,7 +27,7 @@ Android customer account-management project for the owner's customers.
 
 Use the owner's `derangedchief-crypto/Reseller-website` as the reference for package, bouquet, renewal, and connection-management functions. AM owns its copies/implementations; the reseller site and existing workers remain separate. See [`docs/reseller-worker-reference.md`](docs/reseller-worker-reference.md) for traced endpoints, known schema, and remaining deployment inputs. The live APK shows a bouquet setup-pending state until this backend is connected; category mapping is no longer needed.
 
-The owner approved reusing the existing reseller worker through a separate AM customer API hosted alongside the reseller website. Preserve the existing site and worker. [`server/README.md`](server/README.md) documents the read-only hosting inventory and deployment boundary; the customer API is not deployed yet.
+The owner approved reusing the existing reseller worker through a separate AM customer API hosted alongside the reseller website, and adding a reseller-facing AM App control section. Preserve existing site behavior and worker contracts; introduce the new section additively. [`server/README.md`](server/README.md) documents the hosting checks and deployment boundary; the customer API and reseller control section are not deployed yet. See [`docs/multi-reseller-integration.md`](docs/multi-reseller-integration.md) for the updated architecture.
 
 ## Billing reference for future integration
 
