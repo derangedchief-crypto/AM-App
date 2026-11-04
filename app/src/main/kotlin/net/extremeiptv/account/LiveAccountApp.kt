@@ -211,7 +211,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
             } else when (tab) {
                 "Home" -> {
                     Heading("Everything,\nin your control.", "Your service. Your way.")
-                    LiveServiceCard(account)
+                    LiveServiceCard(account, showBouquets = false)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Stat("CONNECTIONS", account.maxConnections?.toString() ?: "—",
                             "${account.activeConnections?.toString() ?: "—"} currently connected", Modifier.weight(1f))
@@ -304,7 +304,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
 }
 
 @Composable
-private fun LiveServiceCard(account: ServiceAccount) = BoxCard {
+private fun LiveServiceCard(account: ServiceAccount, showBouquets: Boolean = true) = BoxCard {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text("YOUR SUBSCRIPTION", color = Muted, fontSize = 10.sp, letterSpacing = 1.4.sp, modifier = Modifier.weight(1f))
         Surface(color = (if (account.status == ServiceStatus.ACTIVE) Lime else Amber).copy(alpha = 0.10f), shape = RoundedCornerShape(8.dp)) {
@@ -313,7 +313,7 @@ private fun LiveServiceCard(account: ServiceAccount) = BoxCard {
         }
     }
     Text(account.serviceDisplayName, fontSize = 36.sp, fontWeight = FontWeight.Bold)
-    Text(account.bouquets.joinToString(" + ").ifBlank { account.packageName ?: "Your subscription" }, color = Muted, fontSize = 13.sp,
+    if (showBouquets) Text(account.bouquets.joinToString(" + ").ifBlank { account.packageName ?: "Your subscription" }, color = Muted, fontSize = 13.sp,
         maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     HorizontalDivider(color = Muted.copy(alpha = 0.15f))
     Detail("${account.maxConnections?.toString() ?: "—"} connections", account.packageName ?: "Current package")
