@@ -27,7 +27,7 @@ try {
     $db=new PDO('sqlite:'.$config['database']); $db->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
     foreach (['am_customer_sessions','am_customer_access','am_customer_limits','am_customer_quotes','am_customer_orders','am_package_prices','am_square_connections'] as $table) $db->query('SELECT 1 FROM '.$table.' LIMIT 0');
     $r=call_auth_worker('/am/capabilities',[]);
-    if (($r['ok']??false)!==true || ($r['version']??null)!==1 || empty($r['idempotent_renewal']) || empty($r['authoritative_ownership']) || empty($r['bouquet_editing'])) throw new RuntimeException('Worker capabilities not confirmed');
+    if (($r['ok']??false)!==true || ($r['version']??null)!==1 || empty($r['idempotent_renewal']) || empty($r['authoritative_ownership']) || empty($r['bouquet_editing']) || empty($r['unlimited_bouquets'])) throw new RuntimeException('Worker capabilities not confirmed');
     echo "PASS: AM storage, private key and signed worker ownership/idempotent renewal capabilities are ready.\n";
 } catch (Throwable $e) {
     fwrite(STDERR,"AM readiness failed. Check the worker add-on, website update and configured worker connection. No credentials were printed.\n"); exit(1);

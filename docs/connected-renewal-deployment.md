@@ -1,4 +1,4 @@
-# Bouquet editing and connected renewal deployment — 0.3.1
+# Bouquet editing and connected renewal deployment — 0.3.2
 
 This release connects Android → AM PHP customer API → additive signed `/am/*` worker contracts. Customers can edit permitted bouquets for free and renew their current package. Package/connection changes require the reseller. Existing reseller endpoints and Hub remain unchanged.
 
@@ -6,7 +6,9 @@ This release connects Android → AM PHP customer API → additive signed `/am/*
 
 Update both servers using this release's pinned source revision, then install the APK. The worker installer recognizes the exact previously released AM module, backs it up alongside main.py and replaces only that module; unexpected local modifications are rejected. No new bouquet database table is required.
 
-On the hidden AM page, enable **Add or remove permitted bouquets (free)** under Customer permissions and save. In the app, refresh → Services → choose bouquets → Save bouquets → confirm. Removing all selections is permitted after an explicit warning. Existing selected bouquets no longer offered may be retained or removed, but cannot be newly added.
+On the hidden AM page, enable **Add or remove permitted bouquets (free)** under Customer permissions and save. In the app, refresh → Services → choose bouquets → Save bouquets → confirm. Removing a package bouquet does not remove it from the available list: it can be added again as often as wanted. Activated no-expiry (unlimited) services can select any bouquet in the full catalogue, even without a package. An unactivated service with no expiry is not classified as unlimited. Removing all selections is permitted after an explicit warning.
+
+Set **Service display name (shown in the app)** on the AM page to brand the subscription heading, for example Extreme TV. The package remains a separate service detail. Deploy both server updates and the new APK for this release; all public instructions intentionally omit private host IP addresses.
 
 Bouquet saves check server-side ownership, current package permissions, credential revision and selection revision while holding the same reseller/customer locks as renewals. They change only bouquet selection and modification time, never expiry, connections, package or credits. Repeating the same selection repairs a lost reply/native refresh without charges; stale conflicting edits require refresh. Sandbox mode applies to payments only: confirmed bouquet edits are real service changes and are free.
 

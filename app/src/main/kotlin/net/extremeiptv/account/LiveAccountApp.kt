@@ -215,7 +215,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                         Label("SIGNED IN AS")
                         Text(account.username, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                         Detail("Account status", account.status.label)
-                        Detail("App version", "0.3.1 · Bouquets & renewals")
+                        Detail("App version", "0.3.2 · Bouquets & service name")
                         Detail("Provider", account.providerName.ifBlank { "Your reseller" })
                         if (account.supportEmail.isNotBlank()) Detail("Reseller support", account.supportEmail)
                         Detail("Login", if (state.remembered) "Remembered on this device" else "Not saved on this device")
@@ -258,7 +258,7 @@ private fun LiveServiceCard(account: ServiceAccount) = BoxCard {
     Label("YOUR SUBSCRIPTION")
     Text(account.status.label.uppercase(), color = if (account.status == ServiceStatus.ACTIVE) Lime else Amber,
         fontSize = 12.sp, fontWeight = FontWeight.Bold)
-    Text(account.packageName ?: "Your service", fontSize = 30.sp, fontWeight = FontWeight.Bold)
+    Text(account.serviceDisplayName, fontSize = 30.sp, fontWeight = FontWeight.Bold)
     Text(account.username, color = Muted)
     HorizontalDivider(color = Muted.copy(alpha = 0.15f))
     Detail("Expires", account.expiryText())
@@ -269,7 +269,8 @@ private fun BouquetEditor(account: ServiceAccount, busy: Boolean, message: Strin
     var selected by remember(account.bouquetRevision) { mutableStateOf(account.bouquetChoices.filter { it.selected }.map { it.id }.toSet()) }
     var confirm by remember { mutableStateOf(false) }
     Label("BOUQUETS")
-    Hint("Add or remove bouquets permitted by your package. There is no extra charge.")
+    Hint(if (account.unlimited) "Your unlimited service can add or remove any bouquet in the catalogue. Changes are free and reversible."
+        else "Turn your package's bouquets on or off whenever you want. Removed package bouquets stay available to add again. No extra charge.")
     if (account.bouquetChoices.isEmpty()) Hint("No bouquets are available for this package.")
     account.bouquetChoices.forEach { bouquet ->
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -278,7 +279,7 @@ private fun BouquetEditor(account: ServiceAccount, busy: Boolean, message: Strin
                 onCheckedChange = { checked -> selected = if (checked) selected + bouquet.id else selected - bouquet.id })
             Column(Modifier.weight(1f)) {
                 Text(bouquet.name)
-                if (!bouquet.available) Hint("Existing bouquet; cannot be added again after removal.")
+                if (!bouquet.available) Hint("Not included in your current package. Contact your reseller to change access.")
             }
         }
     }

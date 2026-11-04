@@ -54,9 +54,9 @@ Current checkout requires an approved branded package and an expired service. A 
 
 ## Status
 
-Version **0.3.1: bouquet editing and connected renewals**. Services now offers bouquet checkboxes and a free confirmed save, controlled by the reseller's bouquet permission. Matching uppercase AM artwork appears in the launcher and app. Package/connection changes still require the reseller. The app uses AM customer APIs with authoritative ownership checks; there is no direct-provider fallback for account access.
+Version **0.3.2: reversible bouquet editing and reseller service branding**. Package bouquets can be added, removed and added again freely. Activated unlimited/no-expiry services can use the full bouquet catalogue, including services without a package. The subscription heading uses the reseller's Service display name. Editing remains controlled by the reseller's bouquet permission; package/connection changes require the reseller.
 
-[Download the 0.3.1 APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.3.1-bouquets-renewals/AM-Account-0.3.1-bouquets-renewals-test.apk). Update both worker and website first, then enable **Add or remove permitted bouquets (free)** in AM customer permissions. Application ID/signing remain compatible with earlier test builds.
+[Download the 0.3.2 APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.3.2-bouquets-branding/AM-Account-0.3.2-bouquets-branding-test.apk). Update both worker and website first, then enable **Add or remove permitted bouquets (free)** in AM customer permissions and set the Service display name. Application ID/signing remain compatible with earlier test builds.
 
 Login, bouquet/package reads, renewal offers, confirmation, Square browser checkout, status recovery and new order history are connected in code. Production mode requires server-verified captured payment before fulfilment; sandbox never renews. Service changes are reseller-only. Downloads/updates open GitHub Releases; silent/automatic APK installation is not implemented. Live device and production-payment acceptance remain deployment checks.
 

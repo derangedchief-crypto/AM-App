@@ -187,7 +187,7 @@ function am_selected(string $value, string $expected): string { return $value ==
 <label class="am-switch"><input type="checkbox" name="app_enabled" value="1"<?= am_checked($settings['app_enabled']) ?>><span>Enable AM for my customers<small class="am-muted">The customer API checks this setting at every login and request.</small></span></label>
 <label class="am-field"><span>Who can use the app?</span><select name="customer_policy"><option value="selected"<?= am_selected($settings['customer_policy'], 'selected') ?>>Only customers I approve</option><option value="all"<?= am_selected($settings['customer_policy'], 'all') ?>>All customers belonging to me</option></select></label>
 <p class="am-muted">Approve individual services below. Revoking access blocks that service even under the all-customers policy.</p>
-<label class="am-field"><span>Provider display name</span><input type="text" name="display_name" maxlength="120" value="<?= e($settings['display_name']) ?>"></label>
+<label class="am-field"><span>Service display name (shown in the app)</span><input type="text" name="display_name" maxlength="120" placeholder="e.g. Extreme TV" value="<?= e($settings['display_name']) ?>"></label>
 <label class="am-field"><span>Customer support email</span><input type="email" name="support_email" maxlength="254" value="<?= e($settings['support_email']) ?>"></label>
 </section>
 <section class="card"><h2>Customer permissions</h2><p class="am-muted">Customers can edit permitted bouquets for free and renew their current package. Package and connection changes are handled by their reseller.</p>

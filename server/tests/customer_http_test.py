@@ -14,7 +14,7 @@ PHP = os.environ.get('PHP', 'php')
 SOURCE = Path(__file__).resolve().parents[1]
 WORKER = '''<?php
 function call_auth_worker($route,$body) {
-    if ($route==='/am/capabilities') return ['ok'=>true,'version'=>1,'authoritative_ownership'=>true,'idempotent_renewal'=>true,'bouquet_editing'=>true];
+    if ($route==='/am/capabilities') return ['ok'=>true,'version'=>1,'authoritative_ownership'=>true,'idempotent_renewal'=>true,'bouquet_editing'=>true,'unlimited_bouquets'=>true];
     if ($route==='/am/customer-auth' && ($body['username']??'')==='customer' && ($body['password']??'')==='secret') {
         return ['ok'=>true,'reseller_id'=>'1','auth_revision'=>'revision','line'=>['line_id'=>'10']];
     }

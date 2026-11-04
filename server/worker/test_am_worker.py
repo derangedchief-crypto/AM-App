@@ -194,6 +194,27 @@ class WorkerTest(unittest.TestCase):
         with self.assertRaises(ContractError): self.service.update_bouquets(request)
         self.assertEqual(json.loads(self.row('SELECT bouquet FROM customers')[0]),[1,2])
 
+    def test_package_bouquets_can_be_removed_and_readded_repeatedly(self):
+        for selected in ([1,2],[1],[1,2],[],[2],[1,2]):
+            result = self.service.update_bouquets(self.bouquet_request(list(selected)))
+            self.assertEqual({b['id'] for b in result['line']['bouquets'] if b['available']},{1,2})
+            self.assertEqual({b['id'] for b in result['line']['bouquets'] if b['selected']},set(selected))
+        self.assertEqual(self.row('SELECT credits FROM users WHERE id=1')[0],'20')
+
+    def test_unlimited_service_can_toggle_entire_catalogue_without_package(self):
+        self.change("INSERT INTO bouquets VALUES (99,'Adult')")
+        with self.assertRaises(ContractError): self.service.update_bouquets(self.bouquet_request([99]))
+        self.change('UPDATE customers SET package_id=NULL,exp_date=0,activated=1')
+        for selected in ([1,99],[1],[],[99]):
+            result = self.service.update_bouquets(self.bouquet_request(list(selected)))
+            self.assertEqual({b['id'] for b in result['line']['bouquets'] if b['available']},{1,2,99})
+            self.assertEqual({b['id'] for b in result['line']['bouquets'] if b['selected']},set(selected))
+        self.assertEqual(self.row('SELECT exp_date,package_id,max_connections FROM customers'),(0,None,2))
+        self.assertEqual(self.row('SELECT credits FROM users WHERE id=1')[0],'20')
+        with self.assertRaises(ContractError): self.service.update_bouquets(self.bouquet_request([999]))
+        self.change("UPDATE customers SET activated=0,package_id=1,bouquet='[1]'")
+        with self.assertRaises(ContractError): self.service.update_bouquets(self.bouquet_request([99]))
+
     def test_atomic_replay_concurrency_and_remaining_time(self):
         request = self.renewal()
         with ThreadPoolExecutor(max_workers=4) as pool:

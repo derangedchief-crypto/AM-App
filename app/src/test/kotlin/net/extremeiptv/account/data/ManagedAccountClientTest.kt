@@ -20,6 +20,8 @@ class ManagedAccountClientTest {
             server.reply("""{"ok":true,"token":"${"b".repeat(64)}","account":${account()}}""")
             val account = client.readAccount(ServiceCredentials("customer", "secret"))
             assertEquals(listOf("News"), account.bouquets)
+            assertEquals("Reseller", account.serviceDisplayName)
+            assertEquals("Extreme TV", account.copy(providerName="Extreme TV",packageName=null).serviceDisplayName)
             val login = server.takeRequest(); assertNull(login.getHeader("Authorization"))
             assertEquals("login", JSONObject(login.body.readUtf8()).getString("action"))
             server.reply("""{"ok":true,"quote":{"quote_id":"${"c".repeat(32)}","package_name":"Monthly","amount_minor":725,"currency":"CAD","mode":"live","duration":30,"duration_period":"days","max_connections":2}}""")

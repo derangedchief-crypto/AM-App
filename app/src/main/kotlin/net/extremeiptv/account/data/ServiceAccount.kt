@@ -30,7 +30,9 @@ internal data class ServiceAccount(
     val bouquetChoices: List<BouquetChoice> = emptyList(),
     val bouquetRevision: String = "",
     val canEditBouquets: Boolean = false,
-)
+) {
+    val serviceDisplayName: String get() = providerName.trim().ifBlank { packageName?.takeIf { it.isNotBlank() } ?: "Your subscription" }
+}
 
 internal data class BouquetChoice(val id: Int, val name: String, val selected: Boolean, val available: Boolean)
 internal data class BouquetSave(val account: ServiceAccount, val refreshPending: Boolean)

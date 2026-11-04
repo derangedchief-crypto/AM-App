@@ -76,9 +76,15 @@ class BouquetUpdate(Customer):
     auth_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
 
 
-def bouquet_revision(line, package):
+def unlimited(line):
+    # An unactivated line also has no expiry; that is NOT an unlimited service.
+    return int(line.get('activated') or 0) == 1 and int(line.get('exp_date') or 0) == 0
+
+
+def bouquet_revision(line, package, allowed=None):
     return digest([str(line['id']), str(line['member_id']), str(line.get('package_id')),
-                   sorted(set(ids(line.get('bouquet')))), sorted(set(ids(package.get('bouquets')))) if package else []])
+                   unlimited(line), sorted(set(ids(line.get('bouquet')))),
+                   sorted(set(allowed if allowed is not None else ids(package.get('bouquets')) if package else []))])
 
 
 def digest(value):
@@ -166,6 +172,8 @@ class Service:
         allowed = ids(package.get("bouquets")) if package else []
         cur.execute("SELECT id,bouquet_name FROM bouquets")
         names = {int(row["id"]): str(row["bouquet_name"]) for row in cur.fetchall()}
+        if unlimited(line):
+            allowed = sorted(names)
         revision = hmac.new(self.w["settings"].shared_secret.encode(),
                             ("am-auth-revision:" + json.dumps([line.get(key) for key in ("id", "member_id", "username", "password", "activation_code")], separators=(",", ":"))).encode(), hashlib.sha256).hexdigest()
         return {"ok": True, "reseller_id": str(owner["id"]), "reseller_username": owner["username"], "auth_revision": revision,
@@ -175,7 +183,7 @@ class Service:
                          "max_connections": int(line.get("max_connections") or 1),
                          "expire_at": int(line.get("exp_date") or 0), "activated": bool(line.get("activated")),
                          "is_trial": bool(line.get("is_trial")), "line_fingerprint": line_fingerprint(line),
-                         "bouquet_revision": bouquet_revision(line, package),
+                         "bouquet_revision": bouquet_revision(line, package, allowed),
                          "bouquets": [{"id": bid, "name": names.get(bid, str(bid)), "selected": bid in selected, "available": bid in allowed}
                                       for bid in sorted(set(selected + allowed))]}}
 
@@ -186,16 +194,17 @@ class Service:
         with self.transaction() as (cur, conn):
             owner = self.owner(cur, request.reseller_id, lock=True)
             line = self.line(cur, owner, request.line_id, lock=True)
-            package = self.package(cur, owner, int(line.get('package_id') or 0), lock=True)
+            if not unlimited(line):
+                self.package(cur, owner, int(line.get('package_id') or 0), lock=True)
             view = self.customer_view(cur, owner, line)
             if not hmac.compare_digest(view['auth_revision'], request.auth_revision):
                 raise ContractError('Service login changed. Sign in again.')
             current = sorted(set(ids(line.get('bouquet'))))
-            allowed = set(ids(package.get('bouquets')))
+            allowed = {b['id'] for b in view['line']['bouquets'] if b['available']}
             if set(desired) - (allowed | set(current)):
                 raise ContractError('A selected bouquet is not permitted for this package.')
             if current != desired:
-                if not hmac.compare_digest(bouquet_revision(line, package), request.revision):
+                if not hmac.compare_digest(view['line']['bouquet_revision'], request.revision):
                     raise ContractError('Bouquets or package changed. Refresh before editing again.')
                 cur.execute('UPDATE customers SET bouquet=%s,updated=NOW() WHERE id=%s AND member_id=%s',
                             (json.dumps(desired), line['id'], owner['id']))
@@ -366,7 +375,7 @@ def register(app, worker):
         app.add_api_route(path, handler, methods=["POST"], name="am_" + path.rsplit("/", 1)[-1])
 
     add("/am/customer-auth", Login, service.login)
-    add("/am/capabilities", Input, lambda _: {"ok": True, "version": 1, "authoritative_ownership": True, "idempotent_renewal": True, "bouquet_editing": True})
+    add("/am/capabilities", Input, lambda _: {"ok": True, "version": 1, "authoritative_ownership": True, "idempotent_renewal": True, "bouquet_editing": True, "unlimited_bouquets": True})
     add("/am/customer", Customer, service.customer)
     add("/am/customer-bouquets", BouquetUpdate, service.update_bouquets)
     add("/am/packages", Owner, service.catalogue)
