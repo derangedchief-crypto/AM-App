@@ -103,11 +103,24 @@ final class Square
         $pid = self::id($tenders[0]['payment_id'] ?? null);
         $p = $this->request($c, '/v2/payments/' . rawurlencode($pid))['payment'] ?? [];
         if (($p['status'] ?? '') !== 'COMPLETED') return $pending;
-        if (($p['id'] ?? '') !== $pid || ($p['order_id'] ?? '') !== $id || ($p['location_id'] ?? '') !== $c['location_id']
-            || ($p['amount_money']['amount'] ?? null) !== (int)$o['amount_minor'] || ($p['amount_money']['currency'] ?? '') !== $o['currency']
-            || ($p['refunded_money']['amount'] ?? 0) !== 0 || ($p['tip_money']['amount'] ?? 0) !== 0
-            || ($p['source_type'] ?? '') !== 'CARD' || ($p['card_details']['status'] ?? '') !== 'CAPTURED') {
-            throw new \RuntimeException('Payment is not a matching, unrefunded captured card payment.');
+        $mismatches = [];
+        if (($p['id'] ?? '') !== $pid) $mismatches[] = 'payment ID';
+        if (($p['order_id'] ?? '') !== $id) $mismatches[] = 'order ID';
+        if (($p['location_id'] ?? '') !== $c['location_id']) $mismatches[] = 'location';
+        if (($p['amount_money']['amount'] ?? null) !== (int)$o['amount_minor']) $mismatches[] = 'amount';
+        if (($p['amount_money']['currency'] ?? '') !== $o['currency']) $mismatches[] = 'currency';
+        if (($p['refunded_money']['amount'] ?? 0) !== 0) $mismatches[] = 'refund';
+        if (($p['tip_money']['amount'] ?? 0) !== 0) $mismatches[] = 'tip';
+        if ($mismatches) throw new \RuntimeException('Square payment mismatch: ' . implode(', ', $mismatches) . '. Keep this invoice; do not pay again.');
+        // Square hosted-checkout Sandbox Testing Panel can produce EXTERNAL payments,
+        // not captured cards. Record a separate test-only result, never live settlement.
+        if ($c['mode'] === 'sandbox' && ($p['source_type'] ?? '') === 'EXTERNAL') {
+            return ['status' => 'sandbox_verified', 'payment_id' => $pid];
+        }
+        if (($p['source_type'] ?? '') !== 'CARD' || ($p['card_details']['status'] ?? '') !== 'CAPTURED') {
+            $enum = static fn($value): string => is_string($value) && preg_match('/^[A-Z_]{1,40}$/D', $value) ? $value : 'missing/invalid';
+            throw new \RuntimeException('Square payment source is ' . $enum($p['source_type'] ?? null)
+                . '; card status is ' . $enum($p['card_details']['status'] ?? null) . '. Expected CARD / CAPTURED. Keep this invoice; do not pay again.');
         }
         return ['status' => 'paid', 'payment_id' => $pid];
     }
@@ -218,7 +231,7 @@ final class SquareStore
         $this->db->prepare('INSERT OR IGNORE INTO am_square_tests (id,reseller_id,connection_id,amount_minor,currency,status,created_at) VALUES (?,?,?,?,?,?,?)')
             ->execute([bin2hex(random_bytes(16)), $reseller, $connection, 100, $c['currency'], 'pending', time()]);
         $o = $this->test($reseller, $connection);
-        if ($o['checkout_url'] || $o['status'] === 'paid') return;
+        if ($o['checkout_url'] || in_array($o['status'], ['paid', 'sandbox_verified'], true)) return;
         $link = $this->api->create($c, $o, $this->config['public_url'] . '/?square_return=1');
         $this->db->prepare('UPDATE am_square_tests SET square_order_id=?,link_id=?,checkout_url=? WHERE id=? AND reseller_id=?')
             ->execute([$link['square_order_id'],$link['link_id'],$link['checkout_url'],$o['id'],$reseller]);
@@ -230,7 +243,7 @@ final class SquareStore
         if (!$o || !$o['square_order_id']) throw new \InvalidArgumentException('Create or retry the original checkout first.');
         try {
             $status = $this->api->status($c, $o);
-            if ($o['status'] === 'paid' && $status['status'] !== 'paid') throw new \RuntimeException('Previously verified payment now requires review.');
+            if (in_array($o['status'], ['paid', 'sandbox_verified'], true) && $status['status'] !== $o['status']) throw new \RuntimeException('Previously verified payment now requires review.');
             // A slower pending lookup must never reopen a checkout verified by a concurrent webhook.
             $this->db->prepare("UPDATE am_square_tests SET status=CASE WHEN payment_id IS NOT NULL AND ?='pending' THEN 'review' ELSE ? END,payment_id=COALESCE(?,payment_id) WHERE id=? AND reseller_id=?")
                 ->execute([$status['status'],$status['status'],$status['payment_id'],$o['id'],$reseller]);

@@ -15,8 +15,8 @@ $root = (getenv('TMPDIR') ?: '/tmp/opencode') . '/am-square-test-' . bin2hex(ran
 mkdir($root, 0700, true);
 $config = ['database' => "$root/settings.sqlite", 'secret_key' => "$root/gateway.key", 'public_url' => 'https://panel.example.com/am-app'];
 $token = 'SQUARE_FAKE_TOKEN_NOT_A_REAL_SECRET'; $secret = 'SQUARE_FAKE_WEBHOOK_NOT_A_REAL_SECRET';
-$merchant = 'merchant1'; $paid = false; $mismatch = ''; $failCreate = false; $calls = []; $orders = [];
-$transport = function ($path, $body, $c) use (&$merchant, &$paid, &$mismatch, &$failCreate, &$calls, &$orders): array {
+$merchant = 'merchant1'; $paid = false; $external = false; $mismatch = ''; $failCreate = false; $calls = []; $orders = [];
+$transport = function ($path, $body, $c) use (&$merchant, &$paid, &$external, &$mismatch, &$failCreate, &$calls, &$orders): array {
     $calls[] = [$path, $body];
     if ($path === '/v2/merchants/me') return ['merchant' => ['id' => $merchant, 'status' => 'ACTIVE', 'country' => 'CA', 'business_name' => 'Fixture shop']];
     if ($path === '/v2/locations/loc1') return ['location' => ['id' => 'loc1', 'merchant_id' => $mismatch === 'merchant' ? 'other' : $merchant, 'country' => 'CA', 'currency' => 'CAD', 'status' => 'ACTIVE', 'capabilities' => ['CREDIT_CARD_PROCESSING']]];
@@ -42,7 +42,7 @@ $transport = function ($path, $body, $c) use (&$merchant, &$paid, &$mismatch, &$
         return ['payment' => ['id' => $id, 'order_id' => $order, 'location_id' => 'loc1', 'status' => 'COMPLETED',
             'amount_money' => ['amount' => $mismatch === 'amount' ? 99 : 100, 'currency' => $mismatch === 'currency' ? 'USD' : 'CAD'],
             'refunded_money' => ['amount' => $mismatch === 'refund' ? 100 : 0], 'tip_money' => ['amount' => $mismatch === 'tip' ? 1 : 0],
-            'source_type' => 'CARD', 'card_details' => ['status' => $mismatch === 'capture' ? 'AUTHORIZED' : 'CAPTURED']]];
+            'source_type' => $external ? 'EXTERNAL' : 'CARD', 'card_details' => $external ? [] : ['status' => $mismatch === 'capture' ? 'AUTHORIZED' : 'CAPTURED']]];
     }
     throw new RuntimeException('Unexpected fixture request ' . $path);
 };
@@ -97,6 +97,29 @@ try {
     check($store->connections('1')[0]['webhook_seen'] !== null, 'Authenticated notification recorded');
     $again = new SquareStore($config, new Square($transport));
     check($again->test('1', $id)['status'] === 'paid', 'Paid state persists');
+    $external = true;
+    // Simulate the previously rejected Sandbox Testing Panel payment on the same invoice.
+    $db = new PDO('sqlite:' . $config['database']);
+    $db->prepare("UPDATE am_square_tests SET status='review' WHERE id=?")->execute([$o['id']]);
+    foreach (['amount', 'currency', 'refund', 'tip', 'location', 'order'] as $bad) {
+        $mismatch = $bad; rejects(fn() => $store->refresh('1', $id));
+        check($store->test('1', $id)['status'] === 'review', 'Sandbox simulation still rejects mismatches');
+    }
+    $mismatch = '';
+    $store->refresh('1', $id);
+    check($store->test('1', $id)['status'] === 'sandbox_verified', 'Sandbox EXTERNAL is distinct from captured settlement');
+    $store->webhook($id, $raw, $signature);
+    check($store->test('1', $id)['status'] === 'sandbox_verified', 'Sandbox webhook replay remains test-only');
+    $count = count($calls); $store->checkout('1', $id, false);
+    check(count($calls) === $count, 'Sandbox success cannot open another checkout');
+    $liveReader = ['mode' => 'live', 'token' => $token, 'location_id' => 'loc1'];
+    try {
+        (new Square($transport))->status($liveReader, $o);
+        throw new LogicException('Production must reject EXTERNAL');
+    } catch (RuntimeException $error) {
+        check(str_contains($error->getMessage(), 'EXTERNAL') && str_contains($error->getMessage(), 'CARD / CAPTURED'), 'Safe source-specific diagnostic');
+    }
+    $external = false;
     $merchant = 'merchant-live'; $store->connect('1', 'live', $token, 'loc1'); $live = $store->connections('1')[0]['id'];
     $store->saveWebhook('1', $live, $secret);
     rejects(fn() => $store->checkout('1', $live, false));
@@ -104,7 +127,7 @@ try {
     $db = new PDO('sqlite:' . $config['database']);
     $db->exec("UPDATE am_square_connections SET token_cipher=(SELECT token_cipher FROM am_square_connections WHERE id='$id') WHERE id='$live'");
     rejects(fn() => $store->checkout('1', $live, true));
-    echo "PASS: Square merchant/location validation, encrypted contextual credentials, tenant isolation, merchant ownership, stable retry/idempotency, exact captured settlement, signed webhooks/replay, real-charge confirmation, persistence. No external calls.\n";
+    echo "PASS: Square merchant/location validation, encrypted credentials, tenant isolation, idempotency, exact captured settlement, Sandbox EXTERNAL separation and production rejection, signed webhooks/replay, real-charge confirmation, persistence. No external calls.\n";
 } finally {
     foreach (glob($root . '/*') as $file) unlink($file);
     rmdir($root);

@@ -195,7 +195,7 @@ function am_selected(string $value, string $expected): string { return $value ==
 <label class="am-field"><span>Webhook signature key <?= $connection['webhook_saved'] ? '(saved; enter only to replace)' : '' ?></span><input type="password" name="webhook_key" required maxlength="512" autocomplete="new-password"></label>
 <button class="btn" type="submit">Save webhook key</button></form>
 <p class="am-muted"><?= $connection['webhook_seen'] ? 'Signed notification received at ' . e(gmdate('Y-m-d H:i:s', (int)$connection['webhook_seen'])) . ' UTC.' : 'No authenticated notification received yet. A generic Square test event may not identify your merchant; the checkout payment will send real event data.' ?></p>
-<p><strong>Setup checkout: 1.00 <?= e($connection['currency']) ?>.</strong> No subscription is purchased or renewed. <?= $connection['mode'] === 'live' ? 'This is a real charge; any refund is managed in your Square dashboard.' : 'Use Square sandbox card details, not a real card.' ?></p>
+<p><strong>Setup checkout: 1.00 <?= e($connection['currency']) ?>.</strong> No subscription is purchased or renewed. <?= $connection['mode'] === 'live' ? 'This is a real charge; any refund is managed in your Square dashboard.' : "Use Square's Sandbox Testing Panel to simulate payment. It can report an EXTERNAL test payment rather than captured card details. No real money is collected." ?></p>
 <?php if (!$test || !$test['checkout_url']): ?>
 <form method="post" action="<?= e(url('am-app/#square')) ?>">
 <?= csrf_field() ?><input type="hidden" name="action" value="square_checkout"><input type="hidden" name="connection" value="<?= e($connection['id']) ?>">
@@ -203,7 +203,7 @@ function am_selected(string $value, string $expected): string { return $value ==
 <button class="btn btn-primary" type="submit"<?= $connection['webhook_saved'] ? '' : ' disabled' ?>><?= $test ? 'Retry original checkout creation' : 'Create setup checkout' ?></button></form>
 <?php endif; ?>
 <?php if ($test): ?>
-<p>Test invoice <code><?= e($test['id']) ?></code> · <strong><?= e($test['status'] === 'paid' ? 'Payment verified · no service action' : ($test['status'] === 'review' ? 'Verification requires review · do not pay again' : 'Payment not yet verified')) ?></strong></p>
+<p>Test invoice <code><?= e($test['id']) ?></code> · <strong><?= e($test['status'] === 'sandbox_verified' ? 'Sandbox test verified · no real payment or service action' : ($test['status'] === 'paid' ? ($connection['mode'] === 'sandbox' ? 'Sandbox card test verified · no real payment or service action' : 'Payment verified · no service action') : ($test['status'] === 'review' ? 'Verification requires review · do not pay again' : 'Payment not yet verified'))) ?></strong></p>
 <?php if ($test['checkout_url'] && $test['status'] === 'pending'): ?><a class="btn btn-primary" href="<?= e($test['checkout_url']) ?>" target="_blank" rel="noopener noreferrer">Open Square checkout · 1.00 <?= e($test['currency']) ?></a><?php endif; ?>
 <?php if ($test['square_order_id']): ?><form method="post" action="<?= e(url('am-app/#square')) ?>"><?= csrf_field() ?><input type="hidden" name="action" value="square_refresh"><input type="hidden" name="connection" value="<?= e($connection['id']) ?>"><button class="btn" type="submit">Check payment with Square</button></form><?php endif; ?>
 <?php endif; ?>
