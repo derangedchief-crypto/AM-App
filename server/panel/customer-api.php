@@ -16,7 +16,7 @@ try {
     $input = json_decode($raw,true,16,JSON_THROW_ON_ERROR);
     if (!is_array($input) || !is_string($input['action'] ?? null)) throw new \AmAccount\CustomerError(422,'Invalid request.');
     $action = $input['action']; unset($input['action']);
-    $allowed = match ($action) {'login'=>['username','password','activation_code'],'account','orders','logout'=>[], 'quote'=>['package_id','currency'], 'checkout'=>['quote_id'],'order'=>['order_id'], default=>throw new \AmAccount\CustomerError(404,'Unknown operation.')};
+    $allowed = match ($action) {'login'=>['username','password','activation_code'],'account','orders','logout'=>[], 'bouquets'=>['bouquet_ids','revision'], 'quote'=>['package_id','currency'], 'checkout'=>['quote_id'],'order'=>['order_id'], default=>throw new \AmAccount\CustomerError(404,'Unknown operation.')};
     if (array_diff(array_keys($input),$allowed)) throw new \AmAccount\CustomerError(422,'Unexpected request fields.');
     // Load server-only worker configuration, without starting a reseller session.
     require_once dirname(__DIR__) . '/includes/functions.php';
@@ -37,6 +37,7 @@ try {
             'quote'=>['quote'=>$service->quote($ctx,$input['package_id'],$input['currency'])],
             'checkout'=>['order'=>$service->checkout($ctx,$input['quote_id'] ?? '')],
             'order'=>['order'=>$service->status($ctx,$input['order_id'] ?? '')],
+            'bouquets'=>$service->bouquets($ctx,$input),
         };
     }
     echo json_encode(['ok'=>true]+$result,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES);

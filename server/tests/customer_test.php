@@ -67,6 +67,10 @@ try {
     (new PricingStore($config['database']))->save('1',['package_id'=>'1','currency'=>'CAD','amount'=>'0','revision'=>'0','fingerprint'=>$catalogue[1]['fingerprint'],'enabled'=>'1'],$catalogue);
     $login=$service->login(['username'=>'customer','password'=>'secret'],'fixture');
     $ctx=$service->session($login['token']); check(count($login['account']['offers'])===1,'Offer available');
+    denied(fn()=>$service->bouquets($ctx,['bouquet_ids'=>[1],'revision'=>str_repeat('a',64)]),403);
+    $editable=$ctx; $editable['settings']['allow_bouquets']=true;
+    denied(fn()=>$service->bouquets($editable,['bouquet_ids'=>['1'],'revision'=>str_repeat('a',64)]),422);
+    denied(fn()=>$service->bouquets($editable,['bouquet_ids'=>[1,1],'revision'=>str_repeat('a',64)]),422);
     denied(fn()=>$service->quote($ctx,2,'CAD'),403);
     $legacy=$ctx; $legacy['settings']['allow_packages']=true; $legacy['settings']['allow_connections']=true;
     denied(fn()=>$service->quote($legacy,2,'CAD'),403);

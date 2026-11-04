@@ -27,7 +27,13 @@ internal data class ServiceAccount(
     val bouquets: List<String> = emptyList(),
     val offers: List<RenewalOffer> = emptyList(),
     val renewalMode: String = "sandbox",
+    val bouquetChoices: List<BouquetChoice> = emptyList(),
+    val bouquetRevision: String = "",
+    val canEditBouquets: Boolean = false,
 )
+
+internal data class BouquetChoice(val id: Int, val name: String, val selected: Boolean, val available: Boolean)
+internal data class BouquetSave(val account: ServiceAccount, val refreshPending: Boolean)
 
 internal enum class FailureKind { INVALID_INPUT, UNAUTHORIZED, RESTRICTED, RATE_LIMITED, UNAVAILABLE, INVALID_RESPONSE, CONFLICT }
 
@@ -39,7 +45,7 @@ internal class AccountFailure(val kind: FailureKind) : Exception(when (kind) {
     FailureKind.RATE_LIMITED -> "Too many requests. Please wait a few minutes before trying again."
     FailureKind.UNAVAILABLE -> "Unable to reach the service provider. Check your connection and try again."
     FailureKind.INVALID_RESPONSE -> "The provider returned incomplete account information. Please try again later."
-    FailureKind.CONFLICT -> "This renewal could not be confirmed. Refresh your account and check any existing order before trying again. Contact your reseller if it needs review."
+    FailureKind.CONFLICT -> "This change could not be confirmed. Refresh your account before trying again. For payments, check the existing order; do not pay again. Contact your reseller if it needs review."
 })
 
 internal object AccountParser {

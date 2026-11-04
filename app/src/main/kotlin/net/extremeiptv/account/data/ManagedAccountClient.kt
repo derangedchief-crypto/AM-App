@@ -6,6 +6,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import org.json.JSONArray
 import java.io.IOException
 import java.math.BigDecimal
 import java.util.concurrent.TimeUnit
@@ -110,6 +111,11 @@ internal class ManagedAccountClient(
         return parse { orderJson(reply.getJSONObject("order")) }
     }
 
+    override suspend fun saveBouquets(ids: Set<Int>, revision: String): BouquetSave {
+        val reply = call("bouquets", JSONObject().put("bouquet_ids", JSONArray(ids.sorted())).put("revision", revision))
+        return parse { BouquetSave(account(reply.getJSONObject("account")), reply.getBoolean("refresh_pending")) }
+    }
+
     private fun account(json: JSONObject): ServiceAccount {
         val line = json.getJSONObject("service")
         val expiry = line.getLong("expire_at").also { require(it >= 0) }
@@ -122,6 +128,11 @@ internal class ManagedAccountClient(
             packageName = if (line.isNull("package_name")) null else line.getString("package_name"), createdAt = null,
             providerName = json.getString("provider"), supportEmail = json.getString("support_email"),
             renewalMode = json.getString("renewal_mode").also { require(it in setOf("live", "sandbox")) },
+            bouquetRevision = line.optString("bouquet_revision"),
+            canEditBouquets = json.optBoolean("allow_bouquets") && line.optString("bouquet_revision").matches(Regex("[a-f0-9]{64}")),
+            bouquetChoices = (0 until bouquets.length()).map { bouquets.getJSONObject(it) }.map {
+                BouquetChoice(it.optInt("id"), it.getString("name"), it.getBoolean("selected"), it.optBoolean("available"))
+            },
             bouquets = (0 until bouquets.length()).map { bouquets.getJSONObject(it) }.filter { it.getBoolean("selected") }.map { it.getString("name") },
             offers = (0 until offers.length()).map { i -> offers.getJSONObject(i).let {
                 val packageId = it.getInt("package_id"); require(packageId == line.getInt("package_id"))

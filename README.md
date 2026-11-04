@@ -12,7 +12,7 @@ Universal Android customer account-management app for participating resellers an
 - View services, expiry dates, and past bills.
 - Build bill history from new app transactions in a database the owner will provide; no historical bill import is needed.
 - Renew active or expired services using AM-owned billing functions based on the existing ARVIO flow.
-- Customer checkout is renewal-only for now: renew the current package with its existing connection count. Customers must contact their reseller for package, connection, term or bouquet changes.
+- Customers can add/remove permitted bouquets for free and renew their current package with its existing connection count. Package, connection and term changes require contacting their reseller.
 - Self-service modifications, downgrade credits and proration are outside the current release scope.
 - One universal customer app for any participating reseller, rather than a separate APK per reseller.
 - A new **AM App** section in the reseller panel lets each reseller enable customer access and configure their own billing/renewal flow. The earlier owner-only audience is superseded.
@@ -20,7 +20,7 @@ Universal Android customer account-management app for participating resellers an
 - Signed APK releases and in-app updates following Extreme Hub's release process.
 - Publish source code in the public AM-App GitHub repository, as requested by the owner.
 - Keep AM's implementation independent. Hub is a reference only: do not modify its app, backend functions, enrollment, settings, or deployment for this project.
-- Show services as package → bouquets, without categories. Bouquet changes are handled by the reseller.
+- Show services as package → bouquets, without categories. Resellers control whether customers may edit permitted bouquets.
 - Remember the customer's original login securely across app restarts; explicit sign-out removes it.
 - Each reseller sets its own customer renewal price for every offered package. The worker's fixed package credit cost is still deducted from that reseller on renewal; retail money prices never overwrite wholesale credits. Bouquet selections carry no extra charge.
 
@@ -54,9 +54,9 @@ Current checkout requires an approved branded package and an expired service. A 
 
 ## Status
 
-Version **0.3.0: connected customer renewals**. Matching uppercase AM artwork appears in the adaptive launcher icon and inside the app. Package changes direct customers to their reseller. The app uses AM customer APIs and enforces reseller participation; there is no direct-provider fallback for account access. The legacy activation resolver can resolve a Hub code, but its credentials must still pass AM ownership/access checks.
+Version **0.3.1: bouquet editing and connected renewals**. Services now offers bouquet checkboxes and a free confirmed save, controlled by the reseller's bouquet permission. Matching uppercase AM artwork appears in the launcher and app. Package/connection changes still require the reseller. The app uses AM customer APIs with authoritative ownership checks; there is no direct-provider fallback for account access.
 
-[Download the 0.3.0 connected APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.3.0-connected-renewals/AM-Account-0.3.0-connected-renewals-test.apk). Install the server update first. Application ID/signing remain compatible with earlier test builds.
+[Download the 0.3.1 APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.3.1-bouquets-renewals/AM-Account-0.3.1-bouquets-renewals-test.apk). Update both worker and website first, then enable **Add or remove permitted bouquets (free)** in AM customer permissions. Application ID/signing remain compatible with earlier test builds.
 
 Login, bouquet/package reads, renewal offers, confirmation, Square browser checkout, status recovery and new order history are connected in code. Production mode requires server-verified captured payment before fulfilment; sandbox never renews. Service changes are reseller-only. Downloads/updates open GitHub Releases; silent/automatic APK installation is not implemented. Live device and production-payment acceptance remain deployment checks.
 

@@ -14,11 +14,16 @@ PHP = os.environ.get('PHP', 'php')
 SOURCE = Path(__file__).resolve().parents[1]
 WORKER = '''<?php
 function call_auth_worker($route,$body) {
-    if ($route==='/am/capabilities') return ['ok'=>true,'version'=>1,'authoritative_ownership'=>true,'idempotent_renewal'=>true];
+    if ($route==='/am/capabilities') return ['ok'=>true,'version'=>1,'authoritative_ownership'=>true,'idempotent_renewal'=>true,'bouquet_editing'=>true];
     if ($route==='/am/customer-auth' && ($body['username']??'')==='customer' && ($body['password']??'')==='secret') {
         return ['ok'=>true,'reseller_id'=>'1','auth_revision'=>'revision','line'=>['line_id'=>'10']];
     }
-    if ($route==='/am/customer' && $body===['reseller_id'=>'1','line_id'=>'10']) return ['ok'=>true,'reseller_id'=>'1','auth_revision'=>'revision','line'=>['line_id'=>'10','package_id'=>1,'username'=>'customer','max_connections'=>2,'expire_at'=>1900000000,'activated'=>true,'is_trial'=>false,'bouquets'=>[]]];
+    if ($route==='/am/customer' && $body===['reseller_id'=>'1','line_id'=>'10']) return ['ok'=>true,'reseller_id'=>'1','auth_revision'=>'revision','line'=>['line_id'=>'10','package_id'=>1,'username'=>'customer','max_connections'=>2,'expire_at'=>1900000000,'activated'=>true,'is_trial'=>false,'bouquet_revision'=>str_repeat('c',64),'bouquets'=>json_decode(@file_get_contents(__DIR__.'/bouquets.json')?:'[]',true)]];
+    if ($route==='/am/customer-bouquets') {
+        if ($body['reseller_id']!=='1' || $body['line_id']!=='10' || $body['auth_revision']!=='revision') throw new RuntimeException('Wrong mutation scope');
+        file_put_contents(__DIR__.'/bouquets.json',json_encode(array_map(fn($id)=>['id'=>$id,'name'=>'News','selected'=>true,'available'=>true],$body['bouquet_ids'])));
+        return ['ok'=>true,'refresh_pending'=>false];
+    }
     if ($route==='/am/packages') return ['ok'=>true,'packages'=>[package_fixture()]];
     if ($route==='/am/renew-quote') return ['ok'=>true,'line_fingerprint'=>str_repeat('a',64),'package'=>package_fixture()];
     return ['ok'=>false];
@@ -42,7 +47,7 @@ def run():
         $c=require $root.'/am-app/settings-config.php';
         \AmAccount\SettingsStore::initialize($c['database']); \AmAccount\PricingStore::migrate($c['database']);
         \AmAccount\SquareStore::migrate($c['database']); \AmAccount\CustomerService::migrate($c['database']);
-        $s=array_replace(\AmAccount\Settings::defaults(),['app_enabled'=>true,'customer_policy'=>'all','allow_renewals'=>true,'billing_mode'=>'integrated','gateways'=>['square']]);
+        $s=array_replace(\AmAccount\Settings::defaults(),['app_enabled'=>true,'customer_policy'=>'all','allow_renewals'=>true,'allow_bouquets'=>true,'billing_mode'=>'integrated','gateways'=>['square']]);
         (new \AmAccount\SettingsStore($c['database']))->save('1',0,$s);
         $cat=\AmAccount\PricingStore::catalogue(['ok'=>true,'packages'=>[package_fixture()]]);
         (new \AmAccount\PricingStore($c['database']))->save('1',['package_id'=>'1','currency'=>'CAD','amount'=>'0','revision'=>'0','fingerprint'=>$cat[1]['fingerprint'],'enabled'=>'1'],$cat);
@@ -78,6 +83,12 @@ def run():
             status,login=request({'action':'login','username':'customer','password':'secret'})
             assert status==200,login
             token=login['token']
+            assert login['account']['allow_bouquets'] is True
+            assert request({'action':'bouquets','bouquet_ids':[1],'revision':'c'*64,'reseller_id':'2'})[0]==422
+            assert request({'action':'bouquets','bouquet_ids':['1'],'revision':'c'*64})[0]==422
+            status,saved=request({'action':'bouquets','bouquet_ids':[1],'revision':'c'*64})
+            assert status==200 and saved['refresh_pending'] is False,saved
+            assert saved['account']['service']['bouquets'][0]['id']==1
             assert request({'action':'account','reseller_id':'2'})[0]==422
             assert request({'action':'quote','package_id':'1','currency':'CAD'})[0]==422
             assert request({'action':'quote','package_id':2,'currency':'CAD'})[0]==403

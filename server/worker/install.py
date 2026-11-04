@@ -13,6 +13,7 @@ import sys
 import tempfile
 
 MARKER = '# AM_ACCOUNT_CONTRACT_V1'
+UPGRADE_FROM = {'0142cf410c12082edcd0c5116f9966e969ef733ca79bd3126ffe47d6a7004d3a'}
 EXPECTED = {
     'renew_line': '3b7baffb0c5c8a74d7bc36b0492122635c85ee960e9d160c347c0d23dac258ea',
     '_set_credits': '18fef9783e925c40a3cc1264fd2fc0ded7e8b0dfb1a94457fa1a2c21ecd7916e',
@@ -95,7 +96,8 @@ def main():
     compile(module_text, str(module), 'exec')
     destination = path.with_name(module.name)
     if destination.exists() and destination.read_text() != module_text:
-        raise ValueError('Different AM worker module already exists; refusing replacement.')
+        if hashlib.sha256(destination.read_bytes()).hexdigest() not in UPGRADE_FROM:
+            raise ValueError('Unrecognized AM worker module already exists; refusing replacement.')
     if MARKER in source and not destination.exists():
         raise ValueError('AM registration exists but its module is missing; restore the matching module first.')
     print('Validated deployed renewal/credit helpers. Existing endpoint definitions remain unchanged.', flush=True)
@@ -106,6 +108,8 @@ def main():
     stat = path.stat()
     backup = path.with_name(path.name + '.before-am-' + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
     shutil.copy2(path, backup)
+    if destination.exists():
+        shutil.copy2(destination, backup.with_name(backup.name + '.am-module.py'))
     os.chdir(path.parent)
     sys.path.insert(0, str(path.parent))
     spec = importlib.util.spec_from_file_location('_am_existing_worker', path)

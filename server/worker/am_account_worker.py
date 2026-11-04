@@ -70,6 +70,17 @@ class Result(Owner):
     order_id: str = Field(pattern=r"^[a-f0-9]{32}$")
 
 
+class BouquetUpdate(Customer):
+    bouquet_ids: list[int] = Field(max_length=2000)
+    revision: str = Field(pattern=r"^[a-f0-9]{64}$")
+    auth_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+def bouquet_revision(line, package):
+    return digest([str(line['id']), str(line['member_id']), str(line.get('package_id')),
+                   sorted(set(ids(line.get('bouquet')))), sorted(set(ids(package.get('bouquets')))) if package else []])
+
+
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest()
 
@@ -164,8 +175,40 @@ class Service:
                          "max_connections": int(line.get("max_connections") or 1),
                          "expire_at": int(line.get("exp_date") or 0), "activated": bool(line.get("activated")),
                          "is_trial": bool(line.get("is_trial")), "line_fingerprint": line_fingerprint(line),
+                         "bouquet_revision": bouquet_revision(line, package),
                          "bouquets": [{"id": bid, "name": names.get(bid, str(bid)), "selected": bid in selected, "available": bid in allowed}
                                       for bid in sorted(set(selected + allowed))]}}
+
+    def update_bouquets(self, request):
+        desired = sorted(set(request.bouquet_ids))
+        if any(bid < 0 for bid in desired) or len(desired) != len(request.bouquet_ids):
+            raise ContractError('Invalid bouquet selection.')
+        with self.transaction() as (cur, conn):
+            owner = self.owner(cur, request.reseller_id, lock=True)
+            line = self.line(cur, owner, request.line_id, lock=True)
+            package = self.package(cur, owner, int(line.get('package_id') or 0), lock=True)
+            view = self.customer_view(cur, owner, line)
+            if not hmac.compare_digest(view['auth_revision'], request.auth_revision):
+                raise ContractError('Service login changed. Sign in again.')
+            current = sorted(set(ids(line.get('bouquet'))))
+            allowed = set(ids(package.get('bouquets')))
+            if set(desired) - (allowed | set(current)):
+                raise ContractError('A selected bouquet is not permitted for this package.')
+            if current != desired:
+                if not hmac.compare_digest(bouquet_revision(line, package), request.revision):
+                    raise ContractError('Bouquets or package changed. Refresh before editing again.')
+                cur.execute('UPDATE customers SET bouquet=%s,updated=NOW() WHERE id=%s AND member_id=%s',
+                            (json.dumps(desired), line['id'], owner['id']))
+            conn.commit()
+        # Absolute assignment is replay-safe. Retry a lost response or failed native
+        # refresh with the same selection; no credit, expiry or package changes.
+        try:
+            refreshed = bool(self.w['_overcast_refresh_customer'](int(request.line_id)))
+        except Exception:
+            refreshed = False
+        result = self.customer(Customer(reseller_id=request.reseller_id, line_id=request.line_id))
+        result['refresh_pending'] = not refreshed
+        return result
 
     def login(self, request):
         with self.w["panel_db_cursor"]() as (cur, _):
@@ -323,8 +366,9 @@ def register(app, worker):
         app.add_api_route(path, handler, methods=["POST"], name="am_" + path.rsplit("/", 1)[-1])
 
     add("/am/customer-auth", Login, service.login)
-    add("/am/capabilities", Input, lambda _: {"ok": True, "version": 1, "authoritative_ownership": True, "idempotent_renewal": True})
+    add("/am/capabilities", Input, lambda _: {"ok": True, "version": 1, "authoritative_ownership": True, "idempotent_renewal": True, "bouquet_editing": True})
     add("/am/customer", Customer, service.customer)
+    add("/am/customer-bouquets", BouquetUpdate, service.update_bouquets)
     add("/am/packages", Owner, service.catalogue)
     add("/am/renew-quote", Quote, service.quote)
     add("/am/renew", Renew, service.renew)

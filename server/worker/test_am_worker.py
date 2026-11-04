@@ -20,7 +20,7 @@ import unittest
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from am_account_worker import Service, Login, Customer, Owner, Quote, Renew, Result, ContractError, register
+from am_account_worker import Service, Login, Customer, Owner, Quote, Renew, Result, BouquetUpdate, ContractError, register
 import install
 
 
@@ -159,6 +159,40 @@ class WorkerTest(unittest.TestCase):
         with self.assertRaises(ContractError): self.service.quote(Quote(reseller_id='1',line_id='10',package_id=3))
         self.change('UPDATE users SET status=0 WHERE id=1')
         with self.assertRaises(ContractError): self.service.login(Login(activation_code='CODE-ONE'))
+
+    def bouquet_request(self, selected):
+        view = self.service.customer(Customer(reseller_id='1',line_id='10'))
+        return BouquetUpdate(reseller_id='1',line_id='10',bouquet_ids=selected,
+                             revision=view['line']['bouquet_revision'],auth_revision=view['auth_revision'])
+
+    def test_bouquet_edit_free_scoped_replay_and_refresh_repair(self):
+        request = self.bouquet_request([1,2])
+        self.refresh_ok = False
+        self.assertTrue(self.service.update_bouquets(request)['refresh_pending'])
+        self.refresh_ok = True
+        self.assertFalse(self.service.update_bouquets(request)['refresh_pending'])
+        self.assertEqual(json.loads(self.row('SELECT bouquet FROM customers')[0]),[1,2])
+        self.assertEqual(self.row('SELECT credits FROM users WHERE id=1')[0],'20')
+        self.assertEqual(self.row('SELECT exp_date,package_id,max_connections FROM customers'),(self.base_expiry,1,2))
+        self.assertEqual(self.row('SELECT COUNT(*) FROM users_credits_log')[0],0)
+        self.assertEqual(self.row('SELECT COUNT(*) FROM am_renewal_results')[0],0)
+        with self.assertRaises(ContractError): self.service.update_bouquets(request.model_copy(update={'reseller_id':'2'}))
+        with self.assertRaises(ContractError): self.service.update_bouquets(self.bouquet_request([1,99]))
+        self.service.update_bouquets(self.bouquet_request([]))
+        self.assertEqual(json.loads(self.row('SELECT bouquet FROM customers')[0]),[])
+        with self.assertRaises(ContractError): self.service.update_bouquets(request)
+
+    def test_bouquet_rollback_lost_reply_and_concurrent_edit(self):
+        request = self.bouquet_request([2])
+        self.failure = 'before_commit'
+        with self.assertRaises(RuntimeError): self.service.update_bouquets(request)
+        self.assertEqual(json.loads(self.row('SELECT bouquet FROM customers')[0]),['1'])
+        self.failure = 'after_commit'
+        with self.assertRaises(RuntimeError): self.service.update_bouquets(request)
+        self.assertFalse(self.service.update_bouquets(request)['refresh_pending'])
+        self.change("UPDATE customers SET bouquet='[1,2]'")
+        with self.assertRaises(ContractError): self.service.update_bouquets(request)
+        self.assertEqual(json.loads(self.row('SELECT bouquet FROM customers')[0]),[1,2])
 
     def test_atomic_replay_concurrency_and_remaining_time(self):
         request = self.renewal()

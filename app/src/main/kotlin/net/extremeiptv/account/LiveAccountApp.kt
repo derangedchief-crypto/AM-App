@@ -66,7 +66,7 @@ internal fun LiveAccountApp() = AccountTheme {
     } else {
         // Account changes/logouts dispose navigation and any visible private account details.
         key(account.username) { LiveDashboard(account, state, model::refresh, model::signOut,
-            model::requestQuote, model::confirmRenewal, model::dismissQuote, model::checkOrder) }
+            model::requestQuote, model::confirmRenewal, model::dismissQuote, model::checkOrder, model::saveBouquets) }
     }
 }
 
@@ -141,7 +141,8 @@ private fun SavedLoginScreen(state: LiveAccountState, retry: () -> Unit, signOut
 
 @Composable
 private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refresh: () -> Unit, signOut: () -> Unit,
-    quote: (RenewalOffer) -> Unit, confirm: () -> Unit, dismissQuote: () -> Unit, checkOrder: (String) -> Unit) {
+    quote: (RenewalOffer) -> Unit, confirm: () -> Unit, dismissQuote: () -> Unit, checkOrder: (String) -> Unit,
+    saveBouquets: (Set<Int>, String) -> Unit) {
     val context = LocalContext.current
     var linkError by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf("Home") }
@@ -199,13 +200,9 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                         Detail("Connections", account.maxConnections?.toString() ?: "Not provided")
                         Detail("Trial account", when (account.trial) { true -> "Yes"; false -> "No"; null -> "Not provided" })
                     }
-                    BoxCard {
-                        Label("BOUQUETS")
-                        if (account.bouquets.isEmpty()) Hint("No bouquets are assigned to this service.")
-                        else account.bouquets.forEach { Text(it, fontSize = 16.sp) }
-                    }
+                    BouquetEditor(account, state.busy || state.stale, state.bouquetMessage, saveBouquets)
                     RenewalOptions(account, state.busy || state.stale, quote)
-                    Hint("Contact your reseller for package, connection or bouquet changes. AM only renews your current package.")
+                    Hint("Contact your reseller for package or connection changes. Bouquet editing is free; renewal keeps your current package.")
                 }
                 "Bills" -> {
                     Heading("Your bills", "Renewal payments and invoices.")
@@ -218,7 +215,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                         Label("SIGNED IN AS")
                         Text(account.username, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                         Detail("Account status", account.status.label)
-                        Detail("App version", "0.3.0 · Connected renewals")
+                        Detail("App version", "0.3.1 · Bouquets & renewals")
                         Detail("Provider", account.providerName.ifBlank { "Your reseller" })
                         if (account.supportEmail.isNotBlank()) Detail("Reseller support", account.supportEmail)
                         Detail("Login", if (state.remembered) "Remembered on this device" else "Not saved on this device")
@@ -265,6 +262,34 @@ private fun LiveServiceCard(account: ServiceAccount) = BoxCard {
     Text(account.username, color = Muted)
     HorizontalDivider(color = Muted.copy(alpha = 0.15f))
     Detail("Expires", account.expiryText())
+}
+
+@Composable
+private fun BouquetEditor(account: ServiceAccount, busy: Boolean, message: String?, save: (Set<Int>, String) -> Unit) = BoxCard {
+    var selected by remember(account.bouquetRevision) { mutableStateOf(account.bouquetChoices.filter { it.selected }.map { it.id }.toSet()) }
+    var confirm by remember { mutableStateOf(false) }
+    Label("BOUQUETS")
+    Hint("Add or remove bouquets permitted by your package. There is no extra charge.")
+    if (account.bouquetChoices.isEmpty()) Hint("No bouquets are available for this package.")
+    account.bouquetChoices.forEach { bouquet ->
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = bouquet.id in selected,
+                enabled = account.canEditBouquets && !busy && (bouquet.available || bouquet.selected),
+                onCheckedChange = { checked -> selected = if (checked) selected + bouquet.id else selected - bouquet.id })
+            Column(Modifier.weight(1f)) {
+                Text(bouquet.name)
+                if (!bouquet.available) Hint("Existing bouquet; cannot be added again after removal.")
+            }
+        }
+    }
+    if (account.canEditBouquets) Button(enabled = !busy, onClick = { confirm = true }, modifier = Modifier.fillMaxWidth()) { Text("Save bouquets · Free") }
+    else Hint("Your reseller has not enabled bouquet editing for this service. Ask them to enable it in AM customer permissions.")
+    message?.let { Hint(it) }
+    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("Save bouquet selection?") },
+        text = { Text(if (selected.isEmpty()) "Remove all selected bouquets? You will have no bouquet channel access until you add some again. No charge."
+            else "Save ${selected.size} selected bouquets? Removed bouquets will no longer be available on your service. Your package, connections and expiry stay the same. No charge.") },
+        confirmButton = { TextButton(enabled = !busy, onClick = { confirm = false; save(selected, account.bouquetRevision) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } })
 }
 
 @Composable

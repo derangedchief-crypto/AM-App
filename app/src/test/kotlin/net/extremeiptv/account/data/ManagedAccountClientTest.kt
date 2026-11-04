@@ -68,4 +68,23 @@ class ManagedAccountClientTest {
             }
         }
     }
+
+    @Test fun `bouquet save sends selection revision without tenant or payment data`() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); val client = ManagedAccountClient(server.url("/customer-api.php"))
+            val data = JSONObject(account()).put("allow_bouquets",true)
+            data.getJSONObject("service").put("bouquet_revision","d".repeat(64))
+                .put("bouquets",org.json.JSONArray("""[{"id":1,"name":"News","selected":true,"available":true},{"id":2,"name":"Sports","selected":false,"available":true}]"""))
+            server.reply(JSONObject().put("ok",true).put("token","b".repeat(64)).put("account",data).toString())
+            val initial=client.readAccount(ServiceCredentials("customer","secret")); server.takeRequest()
+            assertTrue(initial.canEditBouquets); assertEquals(2,initial.bouquetChoices.size)
+            server.reply(JSONObject().put("ok",true).put("account",data).put("refresh_pending",true).toString())
+            val saved=client.saveBouquets(setOf(2),initial.bouquetRevision)
+            assertTrue(saved.refreshPending)
+            val body=JSONObject(server.takeRequest().body.readUtf8())
+            assertEquals("bouquets",body.getString("action")); assertEquals(2,body.getJSONArray("bouquet_ids").getInt(0))
+            assertEquals(initial.bouquetRevision,body.getString("revision"))
+            assertFalse(body.has("reseller_id")); assertFalse(body.has("amount_minor"))
+        }
+    }
 }

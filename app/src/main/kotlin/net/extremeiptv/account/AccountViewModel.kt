@@ -22,6 +22,7 @@ internal data class LiveAccountState(
     val orders: List<RenewalOrder> = emptyList(),
     val quote: RenewalQuote? = null,
     val selectedOrder: RenewalOrder? = null,
+    val bouquetMessage: String? = null,
 )
 
 /** Saved login is encrypted; account access still requires fresh provider verification. */
@@ -155,6 +156,14 @@ internal class AccountViewModel(private val client: AccountClient, private val s
         currentCoroutineContext().ensureActive()
         mutableState.value = mutableState.value.copy(selectedOrder = order, quote = null)
         reloadAfterOrder()
+    }
+
+    fun saveBouquets(ids: Set<Int>, revision: String) = renewalOperation {
+        val result = client.saveBouquets(ids, revision)
+        currentCoroutineContext().ensureActive()
+        mutableState.value = mutableState.value.copy(account = result.account, stale = false,
+            bouquetMessage = if (result.refreshPending) "Bouquets saved. Service refresh is pending; tap Save bouquets again to retry."
+                else "Bouquets saved and service refreshed. No charge.")
     }
 
     private suspend fun reloadAfterOrder() {

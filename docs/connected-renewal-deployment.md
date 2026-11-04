@@ -1,6 +1,14 @@
-# Connected renewal deployment — 0.3.0
+# Bouquet editing and connected renewal deployment — 0.3.1
 
-This release connects Android → AM PHP customer API → additive signed `/am/*` worker contracts. Existing reseller endpoints and Hub remain unchanged. Only renewal of the customer's current package and connection count is offered. Package/bouquet changes are handled by the reseller.
+This release connects Android → AM PHP customer API → additive signed `/am/*` worker contracts. Customers can edit permitted bouquets for free and renew their current package. Package/connection changes require the reseller. Existing reseller endpoints and Hub remain unchanged.
+
+## Upgrade from 0.3.0
+
+Update both servers using this release's pinned source revision, then install the APK. The worker installer recognizes the exact previously released AM module, backs it up alongside main.py and replaces only that module; unexpected local modifications are rejected. No new bouquet database table is required.
+
+On the hidden AM page, enable **Add or remove permitted bouquets (free)** under Customer permissions and save. In the app, refresh → Services → choose bouquets → Save bouquets → confirm. Removing all selections is permitted after an explicit warning. Existing selected bouquets no longer offered may be retained or removed, but cannot be newly added.
+
+Bouquet saves check server-side ownership, current package permissions, credential revision and selection revision while holding the same reseller/customer locks as renewals. They change only bouquet selection and modification time, never expiry, connections, package or credits. Repeating the same selection repairs a lost reply/native refresh without charges; stale conflicting edits require refresh. Sandbox mode applies to payments only: confirmed bouquet edits are real service changes and are free.
 
 ## Installation order
 
@@ -16,7 +24,7 @@ Default private state remains `/www/am-app-state/fecxbrfzku.net/settings.sqlite`
 
 At `https://fecxbrfzku.net/am-app/`, signed in as the actual reseller:
 
-- Enable AM, choose all customers or approve individual numeric service IDs, and allow renewals.
+- Enable AM, choose all customers or approve individual numeric service IDs, and allow renewals and bouquet editing.
 - Choose integrated billing (or both), select Square, and initially select **Sandbox** customer checkout mode.
 - Connect the matching Square merchant/location and save its webhook key. Existing sandbox setup connections are preserved.
 - Set and enable the customer price for the customer's **current package**, in the merchant currency. Wholesale credits are separate and bouquets carry no extra charge. A price of 0.00 allows a free customer renewal but still deducts wholesale credits in production.

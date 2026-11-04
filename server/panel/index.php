@@ -190,8 +190,8 @@ function am_selected(string $value, string $expected): string { return $value ==
 <label class="am-field"><span>Provider display name</span><input type="text" name="display_name" maxlength="120" value="<?= e($settings['display_name']) ?>"></label>
 <label class="am-field"><span>Customer support email</span><input type="email" name="support_email" maxlength="254" value="<?= e($settings['support_email']) ?>"></label>
 </section>
-<section class="card"><h2>Renewal permission</h2><p class="am-muted">Customers can renew their current package only. Package, connection and bouquet changes must be handled by their reseller.</p>
-<?php foreach (['allow_renewals' => 'Renew or extend current subscription'] as $field => $label): ?>
+<section class="card"><h2>Customer permissions</h2><p class="am-muted">Customers can edit permitted bouquets for free and renew their current package. Package and connection changes are handled by their reseller.</p>
+<?php foreach (['allow_bouquets' => 'Add or remove permitted bouquets (free)', 'allow_renewals' => 'Renew or extend current subscription'] as $field => $label): ?>
 <label class="am-switch"><input type="checkbox" name="<?= e($field) ?>" value="1"<?= am_checked($settings[$field]) ?>><span><?= e($label) ?></span></label>
 <?php endforeach; ?>
 <p class="am-muted">Services show the package and bouquets, without categories. Customer choices must stay within the permitted package and bouquet catalogue.</p>

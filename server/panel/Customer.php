@@ -120,7 +120,20 @@ final class CustomerService
             } catch (CustomerError | \InvalidArgumentException $error) { /* An unavailable price is not a customer offer. */ }
         }
         return ['service'=>$line,'provider'=>$ctx['settings']['display_name'],'support_email'=>$ctx['settings']['support_email'],
-                'renewal_mode'=>$ctx['settings']['square_mode'],'offers'=>$offers,'server_time'=>time()];
+                'renewal_mode'=>$ctx['settings']['square_mode'],'allow_bouquets'=>(bool)$ctx['settings']['allow_bouquets'],'offers'=>$offers,'server_time'=>time()];
+    }
+
+    public function bouquets(array $ctx, array $input): array
+    {
+        if (!$ctx['settings']['allow_bouquets']) throw new CustomerError(403,'Your reseller has not enabled bouquet editing.');
+        $ids = $input['bouquet_ids'] ?? null; $revision = $input['revision'] ?? null;
+        if (!is_array($ids) || !array_is_list($ids) || count($ids)>2000 || !is_string($revision) || !preg_match('/^[a-f0-9]{64}$/D',$revision)) throw new CustomerError(422,'Invalid bouquet selection.');
+        foreach ($ids as $id) if (!is_int($id) || $id<0) throw new CustomerError(422,'Invalid bouquet ID.');
+        if (count(array_unique($ids)) !== count($ids)) throw new CustomerError(422,'Duplicate bouquet IDs.');
+        $r = $this->worker('/am/customer-bouquets',['reseller_id'=>$ctx['reseller'],'line_id'=>$ctx['line']['line_id'],
+            'auth_revision'=>$ctx['auth_revision'],'bouquet_ids'=>$ids,'revision'=>$revision]);
+        $fresh = $this->context($ctx['reseller'],$ctx['line']['line_id'],$ctx['auth_revision']);
+        return ['account'=>$this->account($fresh),'refresh_pending'=>(bool)($r['refresh_pending'] ?? true)];
     }
 
     public function quote(array $ctx, int $package, string $currency): array
