@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Add the hidden AM module without editing existing portal files."""
 import argparse
+import json
 import os
 from pathlib import Path
 import pwd
@@ -8,6 +9,22 @@ import re
 import shutil
 import subprocess
 import tempfile
+
+
+def clean_php(binary):
+    """Ignore host INI/extensions for installer CLI only; leave PHP-FPM alone."""
+    command = [binary, '-n']
+    probe = subprocess.run(command + ['-r',
+        'echo json_encode([extension_loaded("pdo"), extension_loaded("pdo_sqlite")]);'],
+        check=True, capture_output=True, text=True)
+    pdo, sqlite = json.loads(probe.stdout)
+    if not pdo:
+        command += ['-d', 'extension=pdo.so']
+    if not sqlite:
+        command += ['-d', 'extension=pdo_sqlite.so']
+    subprocess.run(command + ['-r',
+        'if (!extension_loaded("pdo_sqlite")) {fwrite(STDERR,"PDO SQLite required in clean CLI runtime\\n");exit(1);}'], check=True)
+    return command
 
 
 def install():
@@ -32,10 +49,10 @@ def install():
     webroot = site.parent
     if state == webroot or webroot in state.parents:
         raise RuntimeError('State must be outside /www/wwwroot (all website roots).')
+    print('Checking PHP with isolated CLI configuration...', flush=True)
+    php = clean_php(args.php)
     for filename in ('Settings.php', 'index.php'):
-        subprocess.run([args.php, '-l', str(source / filename)], check=True)
-    subprocess.run([args.php, '-r',
-                    'if (!extension_loaded("pdo_sqlite")) {fwrite(STDERR,"PDO SQLite required\n");exit(1);}'], check=True)
+        subprocess.run(php + ['-l', str(source / filename)], check=True)
 
     # Keep every inherited user-INI path; only the new module gets the extra path.
     basedir = ''
@@ -66,7 +83,7 @@ def install():
         created_state = True
         for filename in ('Settings.php', 'index.php'):
             shutil.copyfile(source / filename, stage / filename)
-        subprocess.run([args.php, '-r',
+        subprocess.run(php + ['-r',
                         'require $argv[1]; \\AmAccount\\SettingsStore::initialize($argv[2]);',
                         str(stage / 'Settings.php'), str(state / 'settings.sqlite')], check=True)
         database = str(state / 'settings.sqlite').replace('\\', '\\\\').replace("'", "\\'")

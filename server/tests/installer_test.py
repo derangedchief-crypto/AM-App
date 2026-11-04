@@ -4,11 +4,17 @@ import os
 from pathlib import Path
 import pwd
 import tempfile
+import subprocess
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('installer', Path(__file__).resolve().parents[1] / 'install-panel.py')
 installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
+for loaded, extensions in [('[true,true]', []), ('[true,false]', ['-d', 'extension=pdo_sqlite.so']),
+                            ('[false,false]', ['-d', 'extension=pdo.so', '-d', 'extension=pdo_sqlite.so'])]:
+    with patch.object(installer.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, stdout=loaded)) as run:
+        assert installer.clean_php('/host/php') == ['/host/php', '-n', *extensions]
+        assert all(call.args[0][:2] == ['/host/php', '-n'] for call in run.call_args_list)
 with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR', '/tmp/opencode')) as temporary:
     root = Path(temporary)
     site = root / 'wwwroot/example.test'
