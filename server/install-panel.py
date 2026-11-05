@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import tempfile
 
-PANEL_FILES = ('Settings.php', 'Square.php', 'Promotions.php', 'Pricing.php', 'Licenses.php', 'my-tv-symbol.svg', 'license-gate.php', 'management-style.php', 'workspace-view.php', 'licenses-admin.php', 'promo-banner.php', 'promotions-view.php', 'Customer.php', 'customer-api.php', 'payment-return.php', 'square-webhook.php', 'index.php')
+PANEL_FILES = ('Settings.php', 'Square.php', 'Promotions.php', 'Pricing.php', 'Licenses.php', 'my-tv-symbol.svg', 'showcase-home.png', 'showcase-renewal.png', 'license-showcase.php', 'license-gate.php', 'management-style.php', 'workspace-view.php', 'licenses-admin.php', 'promo-banner.php', 'promotions-view.php', 'Customer.php', 'customer-api.php', 'payment-return.php', 'square-webhook.php', 'index.php')
 
 
 def write_config(path, state, public_url):

@@ -2,6 +2,8 @@
 
 ## My TV workspace
 
+The pre-activation page includes a My TV feature showcase, two illustrative phone images with fictional demo data, reseller tools and payment options. Square and existing billing links are described as supported; Stripe and Rampex are explicitly marked as planned integrations with checkout not yet available. Run `python3 server/update-panel.py` to deploy the page and its bundled PNG assets. Existing activation, suspension, expiry and authorization rules remain enforced by the license gate.
+
 The reseller website uses the approved My TV TV-and-play logo, matching the Android app. Run `python3 server/update-panel.py` followed by `python3 server/install-menus.py` on the Website host to apply the logo to the workspace, activation, licensing and checkout-return pages, browser tabs and reseller navigation. The administrator menu is labeled **My TV licenses**. No APK or worker update is needed for website branding.
 
 Update the Website host with `python3 server/update-panel.py` for the redesigned management site. The default **Overview** shows customer access, enabled prices in the selected currency, checkout mode and setup links. Desktop navigation is grouped by workspace, customers and account; mobile uses an expandable section menu. Packages, promotions, customer access, orders and payment setup share the My TV design. Detailed setup instructions remain available in expandable help.
