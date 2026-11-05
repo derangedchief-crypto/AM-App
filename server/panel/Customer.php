@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace AmAccount;
 require_once __DIR__.'/Licenses.php';
+require_once __DIR__.'/GatewayStore.php';
 
 final class CustomerError extends \RuntimeException
 {
@@ -18,8 +19,9 @@ final class CustomerService
     private PricingStore $prices;
     private Promotions $promotions;
     private Licenses $licenses;
+    private GatewayStore $gateways;
 
-    public function __construct(private array $config, private \Closure $transport, private Square $square)
+    public function __construct(private array $config, private \Closure $transport, private Square $square, ?Gateways $gateways=null)
     {
         if (!is_file($config['database']) || !is_file($config['secret_key'])) throw new \RuntimeException('Customer API not installed.');
         $this->db = new \PDO('sqlite:' . $config['database'], null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
@@ -31,11 +33,13 @@ final class CustomerService
         $this->prices = new PricingStore($config['database']);
         $this->promotions = new Promotions($config['database']);
         $this->licenses = new Licenses($config['database']);
+        $this->gateways = new GatewayStore($config,$gateways ?? new Gateways());
     }
 
     public static function migrate(string $path): void
     {
         Licenses::migrate($path);
+        GatewayStore::migrate($path);
         if (!is_file($path)) throw new \RuntimeException('Settings not installed.');
         $db = new \PDO('sqlite:' . $path, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
         $db->beginTransaction();
@@ -81,16 +85,16 @@ final class CustomerService
         return ['reseller'=>$reseller,'line'=>$r['line'],'auth_revision'=>$r['auth_revision'],'settings'=>$s];
     }
 
-    private function authorizeRenewal(array $ctx, int $package, array $catalogue): array
+    private function authorizeRenewal(array $ctx, int $package, array $catalogue, bool $existingPayment=false): array
     {
         $p = $catalogue[$package] ?? null;
         // Customer checkout is renewal-only, regardless of legacy change permissions.
         if (empty($ctx['line']['package_id'])) throw new CustomerError(403,'No package is assigned to this service. Contact your reseller to assign the correct package.');
         if ($package !== $ctx['line']['package_id']) throw new CustomerError(403,'Only your currently assigned package can be renewed. A price for a different package does not enable renewal of this service.');
         if (!empty($ctx['line']['activated']) && (int)($ctx['line']['expire_at'] ?? -1) === 0) throw new CustomerError(403,'This unlimited service has no expiry date and does not need renewal.');
-        if (!$ctx['settings']['allow_renewals']) throw new CustomerError(403,'The general customer renewal permission is off. Your reseller must enable Renew or extend current subscription and save AM settings.');
-        if (!in_array($ctx['settings']['billing_mode'],['integrated','both'],true)) throw new CustomerError(403,'Integrated billing is not selected. Your reseller must choose Integrated gateway checkout or Both billing methods and save AM settings.');
-        if (!in_array('square',$ctx['settings']['gateways'],true)) throw new CustomerError(403,'Square is not selected in the reseller gateway preferences.');
+        if (!$existingPayment && !$ctx['settings']['allow_renewals']) throw new CustomerError(403,'The general customer renewal permission is off. Your reseller must enable Renew or extend current subscription and save AM settings.');
+        if (!$existingPayment && !in_array($ctx['settings']['billing_mode'],['integrated','both'],true)) throw new CustomerError(403,'Integrated billing is not selected. Your reseller must choose Integrated gateway checkout or Both billing methods and save AM settings.');
+        if (!$existingPayment && !array_intersect(['square','stripe','paypal','rampex'],$ctx['settings']['gateways'])) throw new CustomerError(403,'No payment gateway is selected in reseller preferences.');
         if (!$p) throw new CustomerError(403,'Your assigned package is not currently offered in the reseller catalogue.');
         if ((string)$p['package_type'] === '1') throw new CustomerError(403,'This service is assigned a trial package. Contact your reseller to move it to a paid package.');
         if ($p['max_connections'] !== $ctx['line']['max_connections']) throw new CustomerError(403,'Your service connection limit differs from its assigned package. Your reseller must resolve that mismatch before renewal.');
@@ -98,6 +102,23 @@ final class CustomerService
     }
 
     private function catalogue(string $reseller): array { return PricingStore::catalogue($this->worker('/am/packages',['reseller_id'=>$reseller])); }
+
+    private function paymentOptions(array $ctx,string $currency,int $amount): array
+    {
+        if ($amount===0) { $g=$ctx['settings']['gateways'][0] ?? 'square'; return [['gateway'=>$g,'mode'=>$g==='rampex'?'live':$ctx['settings']['square_mode']]]; }
+        $options=[]; $errors=[];
+        foreach (['square','stripe','paypal','rampex'] as $gateway) {
+            if (!in_array($gateway,$ctx['settings']['gateways'],true)) continue;
+            try {
+                $c=$gateway==='square'?$this->merchants->forCheckout($ctx['reseller'],$ctx['settings']['square_mode'],$currency):$this->gateways->forCheckout($ctx['reseller'],$gateway,$currency);
+                $options[]=['gateway'=>$gateway,'mode'=>$c['mode']];
+            } catch (\InvalidArgumentException $e) { $errors[]=$e->getMessage(); }
+        }
+        if (!$options) throw new \InvalidArgumentException(implode(' ',$errors) ?: 'No payment gateway is ready for this currency.');
+        return $options;
+    }
+    private function gatewayQuote(string $id): array
+    { return $this->one('SELECT * FROM am_gateway_quotes WHERE quote_id=?',[$id]) ?? ['gateway'=>'square','email'=>'']; }
 
     public function login(array $input, string $ip): array
     {
@@ -143,8 +164,8 @@ final class CustomerService
             try {
                 $p = $this->authorizeRenewal($ctx,(int)$row['package_id'],$catalogue);
                 $q = $this->prices->quote($ctx['reseller'],(int)$row['package_id'],$row['currency'],$catalogue);
-                if ($q['amount_minor'] > 0) $this->merchants->forCheckout($ctx['reseller'],$ctx['settings']['square_mode'],$row['currency']);
-                $offers[] = ['package_id'=>$p['id'],'name'=>$packageName($p['id'],$p['name']),'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],'max_connections'=>$p['max_connections'],'currency'=>$q['currency'],'amount_minor'=>$q['amount_minor']];
+                $options=$this->paymentOptions($ctx,$row['currency'],(int)$q['amount_minor']);
+                $offers[] = ['package_id'=>$p['id'],'name'=>$packageName($p['id'],$p['name']),'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],'max_connections'=>$p['max_connections'],'currency'=>$q['currency'],'amount_minor'=>$q['amount_minor'],'payment_options'=>$options];
             } catch (CustomerError | \InvalidArgumentException $error) { $reasons[] = $error->getMessage(); }
         }
         $deals=[];
@@ -154,11 +175,11 @@ final class CustomerService
                 $p=$this->authorizeRenewal($ctx,(int)$promo['package_id'],$catalogue);
                 $base=$this->prices->quote($ctx['reseller'],$p['id'],$promo['currency'],$catalogue);
                 $deal=$this->promotions->price($ctx['reseller'],$promo['id'],$base);
-                if ((int)$deal['amount_minor']>0) $this->merchants->forCheckout($ctx['reseller'],$ctx['settings']['square_mode'],$deal['currency']);
+                $options=$this->paymentOptions($ctx,$deal['currency'],(int)$deal['amount_minor']);
                 $deals[]=['promo_id'=>$deal['id'],'title'=>$deal['title'],'description'=>$deal['description'],
                     'banner_url'=>$this->config['public_url'].'/promo-banner.php?id='.$deal['id'],'ends_at'=>(int)$deal['ends'],
                     'package_id'=>$p['id'],'name'=>$packageName($p['id'],$p['name']),'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],
-                    'max_connections'=>$p['max_connections'],'currency'=>$deal['currency'],'amount_minor'=>(int)$deal['amount_minor'],'normal_amount_minor'=>$base['amount_minor']];
+                    'max_connections'=>$p['max_connections'],'currency'=>$deal['currency'],'amount_minor'=>(int)$deal['amount_minor'],'normal_amount_minor'=>$base['amount_minor'],'payment_options'=>$options];
             } catch (CustomerError | \InvalidArgumentException $e) { /* Only eligible, currently redeemable promotions are customer-facing. */ }
         }
         return ['service'=>$line,'provider'=>$ctx['settings']['display_name'],'support_email'=>$ctx['settings']['support_email'],'deals'=>$deals,
@@ -191,7 +212,7 @@ final class CustomerService
         return ['account'=>$this->account($fresh),'refresh_pending'=>(bool)($r['refresh_pending'] ?? true)];
     }
 
-    public function quote(array $ctx, int $package, string $currency, ?string $promoId=null): array
+    public function quote(array $ctx, int $package, string $currency, ?string $promoId=null, string $gateway='square',string $email=''): array
     {
         $this->licensed($ctx['reseller']);
         if (!in_array($currency,['CAD','USD'],true)) throw new CustomerError(422,'Invalid currency.');
@@ -202,9 +223,13 @@ final class CustomerService
         $q = $this->worker('/am/renew-quote',['reseller_id'=>$ctx['reseller'],'line_id'=>$ctx['line']['line_id'],'package_id'=>$package]);
         $quoted = PricingStore::catalogue(['ok'=>true,'packages'=>[$q['package']]])[$package] ?? null;
         if (!$quoted || $quoted['fingerprint'] !== $p['fingerprint']) throw new CustomerError(409,'Package changed. Refresh renewal options.');
-        $mode = $ctx['settings']['square_mode'];
+        if (!in_array($gateway,['square','stripe','paypal','rampex'],true)) throw new CustomerError(422,'Invalid gateway.');
+        if (!in_array($gateway,$ctx['settings']['gateways'],true)) throw new CustomerError(403,'This gateway is not enabled.');
+        if ($price['amount_minor']>0 && $gateway==='rampex' && (strlen($email)>254 || !filter_var($email,FILTER_VALIDATE_EMAIL))) throw new CustomerError(422,'Enter a valid email for Rampex checkout.');
+        $mode = $gateway==='rampex'?'live':$ctx['settings']['square_mode'];
         $displayName=$this->prices->displayName($ctx['reseller'],$package,$p['name']);
-        $c = $price['amount_minor'] > 0 ? $this->merchants->forCheckout($ctx['reseller'],$mode,$currency) : null;
+        $c = $price['amount_minor'] > 0 ? ($gateway==='square'?$this->merchants->forCheckout($ctx['reseller'],$mode,$currency):$this->gateways->forCheckout($ctx['reseller'],$gateway,$currency)) : null;
+        if ($c) $mode=$c['mode'];
         $id = bin2hex(random_bytes(16));
         $request = ['reseller_id'=>$ctx['reseller'],'line_id'=>$ctx['line']['line_id'],'package_id'=>$package,
                     'line_fingerprint'=>$q['line_fingerprint'],'package_fingerprint'=>$q['package']['worker_fingerprint']];
@@ -214,9 +239,10 @@ final class CustomerService
         try {
             $this->query('INSERT INTO am_customer_quotes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',[$id,$ctx['reseller'],$ctx['line']['line_id'],$ctx['auth_revision'],$package,$currency,$price['amount_minor'],$price['price_revision'],$c['id'] ?? null,$mode,json_encode($request,JSON_THROW_ON_ERROR),$displayName,min(time()+900,(int)($promo['ends'] ?? PHP_INT_MAX))]);
             if ($promo) $this->query('INSERT INTO am_promo_quotes VALUES (?,?,?)',[$id,$promo['id'],$promo['revision']]);
+            if ($gateway!=='square') $this->query('INSERT INTO am_gateway_quotes VALUES (?,?,?)',[$id,$gateway,$gateway==='rampex'?$email:'']);
             $this->db->commit();
         } catch (\Throwable $e) { if ($this->db->inTransaction()) $this->db->rollBack(); throw $e; }
-        return ['quote_id'=>$id,'package_name'=>$displayName,'amount_minor'=>$price['amount_minor'],'currency'=>$currency,'mode'=>$mode,'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],'max_connections'=>$p['max_connections'],'receipt_label'=>'Payment','promo_title'=>$promo['title'] ?? null];
+        return ['quote_id'=>$id,'package_name'=>$displayName,'amount_minor'=>$price['amount_minor'],'currency'=>$currency,'mode'=>$mode,'gateway'=>$gateway,'duration'=>$p['duration'],'duration_period'=>$p['duration_period'],'max_connections'=>$p['max_connections'],'receipt_label'=>'Payment','promo_title'=>$promo['title'] ?? null];
     }
 
     private function order(string $reseller, string $line, string $id): array
@@ -235,8 +261,13 @@ final class CustomerService
         if (!$q || !hash_equals($q['auth_revision'],$ctx['auth_revision'])) throw new CustomerError(409,'Quote expired. Refresh renewal options.');
         $catalogue = $this->catalogue($ctx['reseller']); $this->authorizeRenewal($ctx,(int)$q['package_id'],$catalogue);
         $price = $this->prices->quote($ctx['reseller'],(int)$q['package_id'],$q['currency'],$catalogue);
-        if ($price['price_revision'] !== (int)$q['price_revision'] || $ctx['settings']['square_mode'] !== $q['mode']) throw new CustomerError(409,'Renewal settings changed. Request a new quote.');
-        if ($q['connection_id'] !== null && $this->merchants->forCheckout($ctx['reseller'],$q['mode'],$q['currency'])['id'] !== $q['connection_id']) throw new CustomerError(409,'Merchant settings changed. Request a new quote.');
+        $gateway=$this->gatewayQuote($q['id'])['gateway'];
+        if ($price['price_revision'] !== (int)$q['price_revision'] || ($gateway==='square' && $ctx['settings']['square_mode'] !== $q['mode'])) throw new CustomerError(409,'Renewal settings changed. Request a new quote.');
+        if ($q['connection_id']!==null) {
+            if (!in_array($gateway,$ctx['settings']['gateways'],true)) throw new CustomerError(409,'Gateway disabled. Request a new quote.');
+            $current=$gateway==='square'?$this->merchants->forCheckout($ctx['reseller'],$q['mode'],$q['currency']):$this->gateways->forCheckout($ctx['reseller'],$gateway,$q['currency']);
+            if ($current['id']!==$q['connection_id'] || $current['mode']!==$q['mode']) throw new CustomerError(409,'Merchant settings changed. Request a new quote.');
+        }
         $check = $this->worker('/am/renew-quote',['reseller_id'=>$ctx['reseller'],'line_id'=>$ctx['line']['line_id'],'package_id'=>(int)$q['package_id']]);
         $request = json_decode($q['worker_request'],true,32,JSON_THROW_ON_ERROR);
         if ($check['line_fingerprint'] !== $request['line_fingerprint'] || $check['package']['worker_fingerprint'] !== $request['package_fingerprint']) throw new CustomerError(409,'Service changed. Request a new quote.');
@@ -256,7 +287,7 @@ final class CustomerService
     private function dto(array $o): array
     {
         return ['id'=>$o['id'],'package_name'=>$o['package_name'],'amount_minor'=>(int)$o['amount_minor'],'currency'=>$o['currency'],'mode'=>$o['mode'],'state'=>$o['state'],
-                'payment_verified'=>(bool)$o['payment_verified'],'created_at'=>(int)$o['created_at'],
+                 'payment_verified'=>(bool)$o['payment_verified'],'created_at'=>(int)$o['created_at'],'gateway'=>$this->gatewayQuote($o['quote_id'])['gateway'],
                 'checkout_url'=>in_array($o['state'],['creating','pending'],true) && !$o['payment_verified'] ? $o['checkout_url'] : null,
                 'message'=>match($o['state']) {'applied'=>(int)$o['amount_minor'] === 0 ? 'Service renewed. No customer payment was required.' : 'Payment verified and service renewed.', 'sandbox_verified'=>'Sandbox test verified. No real payment or renewal.',
                     'refresh_pending'=>'Renewal saved; service activation is processing. Do not pay again.',
@@ -271,6 +302,8 @@ final class CustomerService
             if (!$o['payment_verified']) {
                 if ((int)$o['amount_minor'] === 0) {
                     $status = ['status'=>$o['mode']==='sandbox'?'sandbox_verified':'paid','payment_id'=>null];
+                } elseif (($gq=$this->gatewayQuote($o['quote_id']))['gateway']!=='square') {
+                    $status=$this->gateways->payment($o,$gq);
                 } else {
                     $c = $this->merchants->forOrder($o['reseller_id'],$o['connection_id']);
                     if (!$o['square_order_id']) {
@@ -300,7 +333,7 @@ final class CustomerService
                 // Only this private, already-created and payment-verified order path
                 // bypasses licensing. Ownership, credentials and renewal rules still apply.
                 $ctx = $this->context($o['reseller_id'],$o['line_id'],$o['auth_revision'],true);
-                $this->authorizeRenewal($ctx,(int)$o['package_id'],$this->catalogue($o['reseller_id']));
+                $this->authorizeRenewal($ctx,(int)$o['package_id'],$this->catalogue($o['reseller_id']),true);
                 $result = $this->worker('/am/renew',$request);
             }
             if (!in_array($result['state'] ?? '',['applied','applied_refresh_pending'],true) || ($result['order_id'] ?? '') !== $o['id']) throw new CustomerError(503,'Renewal result could not be verified.');

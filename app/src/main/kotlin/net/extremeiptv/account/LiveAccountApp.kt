@@ -64,6 +64,14 @@ internal fun LiveAccountApp() = AccountTheme {
     UpdatePrompt(updates)
     val announcements = remember { net.extremeiptv.account.announcements.AnnouncementInboxState(context) }
     net.extremeiptv.account.announcements.AnnouncementPrompt(announcements)
+    var paymentOffer by remember { mutableStateOf<RenewalOffer?>(null) }
+    val requestRenewal: (RenewalOffer) -> Unit = { offer ->
+        if (offer.amount == 0L || offer.paymentOptions.isEmpty()) model.requestQuote(offer.copy(gateway = offer.paymentOptions.firstOrNull()?.gateway ?: "square"))
+        else paymentOffer = offer
+    }
+    paymentOffer?.let { offer ->
+        PaymentChoice(offer, { paymentOffer = null }) { selected -> paymentOffer = null; model.requestQuote(selected) }
+    }
     val checkUpdates = { updates.check(manual = true) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, model) {
@@ -82,7 +90,7 @@ internal fun LiveAccountApp() = AccountTheme {
     } else {
         // Account changes/logouts dispose navigation and any visible private account details.
         key(account.username) { LiveDashboard(account, state, model::refresh, model::signOut,
-            model::requestQuote, model::confirmRenewal, model::dismissQuote, model::checkOrder, model::saveBouquets, checkUpdates,
+            requestRenewal, model::confirmRenewal, model::dismissQuote, model::checkOrder, model::saveBouquets, checkUpdates,
             { net.extremeiptv.account.announcements.AnnouncementBell(announcements) }) }
     }
 }
@@ -260,7 +268,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                 }
                 BoxCard {
                     Label("PAYMENT")
-                    Detail("Checkout", if (q.mode == "sandbox") "Square · Sandbox" else "Square")
+                    Detail("Checkout", net.extremeiptv.account.data.gatewayName(q.offer.gateway) + if (q.mode == "sandbox") " · Sandbox" else "")
                     HorizontalDivider(color = Muted.copy(alpha = 0.15f))
                     Detail("Amount due", q.offer.price, accent = true)
                 }
@@ -337,7 +345,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                             Detail("Normal price", deal.normalPrice)
                             Detail("Deal price", deal.offer.price, accent = true)
                             Hint("Ends ${dateTimeText(deal.endsAt * 1000)} · ${ZoneId.systemDefault().id}. Future renewals use normal pricing.")
-                            if (account.renewalMode == "sandbox") Hint("Sandbox: test payment only, no service renewal.")
+                            Hint("Choose an available payment method. Test modes never renew service.")
                             Button(onClick = { awaitingReview = true; quote(deal.offer) }, enabled = !state.busy && !state.stale,
                                 shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) {
                                 Text("Review deal · ${deal.offer.price}")
@@ -441,7 +449,7 @@ private fun BouquetEditor(account: ServiceAccount, busy: Boolean, message: Strin
 @Composable
 private fun RenewalOptions(account: ServiceAccount, disabled: Boolean, quote: (RenewalOffer) -> Unit) = BoxCard {
     Label("SUBSCRIPTION LENGTH")
-    if (account.renewalMode == "sandbox") Hint("Sandbox mode: test payments only; your service will not be renewed.")
+    Hint("Choose your payment method before reviewing the renewal. Sandbox payments never renew service.")
     if (account.offers.isEmpty()) Hint(account.renewalUnavailableMessage ?: "No renewal option is currently available. Refresh your account. Your reseller can check the exact reason on the My TV management page.")
     account.offers.forEach { offer ->
         Text("${offer.duration} ${offer.period} · ${offer.connections} connection(s)")
@@ -465,12 +473,12 @@ private fun RenewalOrderCard(order: RenewalOrder, busy: Boolean, check: (String)
     Hint("${dateTimeText(order.createdAt * 1000)} · ${order.id}")
     Text(order.message)
     HorizontalDivider(color = Muted.copy(alpha = 0.15f))
-    Detail("Checkout", if (order.mode == "sandbox") "Square · Sandbox" else "Square")
+    Detail("Checkout", net.extremeiptv.account.data.gatewayName(order.gateway) + if (order.mode == "sandbox") " · Sandbox" else "")
     Detail("Amount", order.price)
     order.checkoutUrl?.let { url ->
         Button(enabled = !busy, onClick = {
             browserError = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.isFailure
-        }, modifier = Modifier.fillMaxWidth()) { Text("Open secure Square checkout") }
+        }, modifier = Modifier.fillMaxWidth()) { Text("Open secure ${net.extremeiptv.account.data.gatewayName(order.gateway)} checkout") }
         Hint("After checkout, return here and check payment / renewal. Opening or returning from checkout does not confirm payment.")
     }
     if (browserError) Hint("Unable to open a browser. Install or enable a browser and try again.")

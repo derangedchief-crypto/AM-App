@@ -13,8 +13,11 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+internal data class PaymentOption(val gateway: String, val mode: String)
+internal fun gatewayName(gateway: String): String = when (gateway) { "paypal" -> "PayPal"; "stripe" -> "Stripe"; "rampex" -> "Rampex"; else -> "Square" }
 internal data class RenewalOffer(val packageId: Int, val name: String, val amount: Long, val currency: String,
-    val duration: Int, val period: String, val connections: Int, val promoId: String? = null) {
+    val duration: Int, val period: String, val connections: Int, val promoId: String? = null,
+    val paymentOptions: List<PaymentOption> = emptyList(), val gateway: String = "square", val email: String = "") {
     val price: String get() = "${BigDecimal.valueOf(amount, 2).toPlainString()} $currency"
 }
 internal data class RenewalQuote(val id: String, val offer: RenewalOffer, val mode: String, val promoTitle: String? = null)
@@ -23,7 +26,7 @@ internal data class PromotionalDeal(val offer: RenewalOffer, val title: String, 
     val normalPrice: String get() = "${BigDecimal.valueOf(normalAmount, 2).toPlainString()} ${offer.currency}"
 }
 internal data class RenewalOrder(val id: String, val name: String, val amount: Long, val currency: String,
-    val mode: String, val state: String, val verified: Boolean, val createdAt: Long, val checkoutUrl: String?) {
+    val mode: String, val state: String, val verified: Boolean, val createdAt: Long, val checkoutUrl: String?, val gateway: String = "square") {
     val price: String get() = "${BigDecimal.valueOf(amount, 2).toPlainString()} $currency"
     val complete: Boolean get() = state in setOf("applied", "sandbox_verified")
     val message: String get() = when (state) {
@@ -100,12 +103,15 @@ internal class ManagedAccountClient(
     override suspend fun quote(offer: RenewalOffer): RenewalQuote {
         val fields = JSONObject().put("package_id", offer.packageId).put("currency", offer.currency)
         offer.promoId?.let { fields.put("promo_id", it) }
+        if (offer.gateway != "square") fields.put("gateway", offer.gateway)
+        if (offer.gateway == "rampex") fields.put("email", offer.email)
         val reply = call("quote", fields)
         return parse {
             val q = reply.getJSONObject("quote")
+            require(gateway(q) == offer.gateway)
             RenewalQuote(id(q, "quote_id"), offer.copy(name = q.getString("package_name"), amount = money(q),
                 currency = currency(q), duration = q.getInt("duration"), period = q.getString("duration_period"),
-                connections = q.getInt("max_connections")), mode(q), if (q.isNull("promo_title")) null else q.getString("promo_title"))
+                connections = q.getInt("max_connections"), email = ""), mode(q), if (q.isNull("promo_title")) null else q.getString("promo_title"))
         }
     }
     override suspend fun checkout(quote: RenewalQuote): RenewalOrder {
@@ -155,26 +161,41 @@ internal class ManagedAccountClient(
                 val amount = money(it); val normal = it.getLong("normal_amount_minor"); require(normal > amount && normal <= 99999999)
                 val connections = it.getInt("max_connections"); require(connections == line.getInt("max_connections"))
                 PromotionalDeal(RenewalOffer(packageId, it.getString("name"), amount, currency(it), it.getInt("duration"),
-                    it.getString("duration_period"), connections, promoId), it.getString("title"), it.getString("description"),
+                    it.getString("duration_period"), connections, promoId, paymentOptions(it, json.getString("renewal_mode"))), it.getString("title"), it.getString("description"),
                     banner.toString(), it.getLong("ends_at"), normal)
             } },
             offers = (0 until offers.length()).map { i -> offers.getJSONObject(i).let {
                 val packageId = it.getInt("package_id"); require(packageId == line.getInt("package_id"))
                 RenewalOffer(packageId, it.getString("name"), money(it), currency(it), it.getInt("duration"),
-                    it.getString("duration_period"), it.getInt("max_connections").also { count -> require(count == line.getInt("max_connections")) })
+                    it.getString("duration_period"), it.getInt("max_connections").also { count -> require(count == line.getInt("max_connections")) }, paymentOptions = paymentOptions(it, json.getString("renewal_mode")))
             } })
     }
 
     private fun orderJson(o: JSONObject): RenewalOrder {
         val mode = mode(o)
+        val gateway = gateway(o)
+        require(gateway != "rampex" || mode == "live")
         val url = if (o.isNull("checkout_url")) null else o.getString("checkout_url").also { value ->
             val parsed = value.toHttpUrl()
-            val allowed = setOf("square.link", "checkout.square.site") + if (mode == "sandbox") setOf("sandbox.square.link", "sandbox.checkout.square.site") else emptySet()
+            val allowed = when (gateway) {
+                "stripe" -> setOf("checkout.stripe.com")
+                "paypal" -> setOf(if (mode == "sandbox") "www.sandbox.paypal.com" else "www.paypal.com")
+                "rampex" -> setOf("checkout.rampex.io", "rampex.io")
+                else -> setOf("square.link", "checkout.square.site") + if (mode == "sandbox") setOf("sandbox.square.link", "sandbox.checkout.square.site") else emptySet()
+            }
             require(parsed.isHttps && parsed.host in allowed && parsed.port == 443 && parsed.username.isEmpty() && parsed.password.isEmpty())
         }
         return RenewalOrder(id(o, "id"), o.getString("package_name"), money(o), currency(o), mode,
             o.getString("state").also { require(it in setOf("creating", "pending", "applying", "review", "refresh_pending", "applied", "sandbox_verified")) },
-            o.getBoolean("payment_verified"), o.getLong("created_at"), url)
+            o.getBoolean("payment_verified"), o.getLong("created_at"), url, gateway)
+    }
+    private fun gateway(o: JSONObject) = o.optString("gateway", "square").also { require(it in setOf("square", "stripe", "paypal", "rampex")) }
+    private fun paymentOptions(o: JSONObject, fallbackMode: String): List<PaymentOption> {
+        val rows = o.optJSONArray("payment_options") ?: return listOf(PaymentOption("square", fallbackMode))
+        require(rows.length() in 1..4)
+        return (0 until rows.length()).map { rows.getJSONObject(it).let { row ->
+            PaymentOption(gateway(row), mode(row)).also { require(it.gateway != "rampex" || it.mode == "live") }
+        } }.also { require(it.map { option -> option.gateway }.distinct().size == it.size) }
     }
     private fun id(o: JSONObject, key: String) = o.getString(key).also { require(it.matches(Regex("[a-f0-9]{32}"))) }
     private fun money(o: JSONObject) = (o.get("amount_minor") as Number).toLong().also { require(it in 0..99999999) }

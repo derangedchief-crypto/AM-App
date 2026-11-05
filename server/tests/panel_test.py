@@ -211,6 +211,12 @@ def run():
             assert request(data=price_input)[0] == 303
             assert request(data=price_input)[0] == 409
             assert request(data={'action': 'square_connect'})[0] == 419
+            assert request(data={'action':'gateway_connect'})[0]==419
+            assert request(data={**fields,'action':'gateway_connect','gateway':'unknown','mode':'live','currency':'USD','secret':'fixture-secret-only'})[0]==422
+            assert request(data={**fields,'action':'gateway_connect','gateway':'rampex','mode':'sandbox','currency':'USD','secret':'fixture-secret-only'})[0]==422
+            assert request(data={**fields,'action':'gateway_configure','connection':'other-reseller','webhook_key':'fixture-webhook-only','enabled':'1'})[0]==422
+            assert request('/am-app/gateway-webhook.php')[0]==405
+            assert request('/am-app/gateway-webhook.php?connection=invalid',data={})[0]==400
             assert request(data={**fields, 'action': 'square_connect', 'mode': 'sandbox', 'token': 'invalid', 'location': 'loc1'})[0] == 422
             assert request(data={**fields, 'action': 'square_webhook', 'connection': 'other-reseller', 'webhook_key': 'fake-secret-key123456'})[0] == 422
             assert request(data={**fields, 'action': 'square_checkout', 'connection': 'other-reseller'})[0] == 422

@@ -34,8 +34,9 @@ if (!isset($resellerId,$licenseState)) { http_response_code(404); exit; }
 <section class="section"><span class="eyebrow">Payments that fit your setup</span><h2>Your customers. Your checkout.</h2><p>Connect supported checkout or direct customers to your existing billing page.</p><div class="grid">
 <article class="tile"><h3>Square</h3><span class="badge">Integrated checkout</span><p>Connect your merchant account, test in sandbox and enable production payments. Payment is verified before a renewal is applied.</p></article>
 <article class="tile"><h3>Your existing billing page</h3><span class="badge">Supported link</span><p>Give customers a direct link to your billing website from the app. Payments and renewals there follow your existing process.</p></article>
-<article class="tile"><h3>Stripe</h3><span class="badge future">Planned integration</span><p>Listed in gateway preferences. Integrated Stripe checkout is not available yet.</p></article>
-<article class="tile"><h3>Rampex</h3><span class="badge future">Planned integration</span><p>Listed in gateway preferences. Integrated Rampex checkout is not available yet.</p></article>
+<article class="tile"><h3>Stripe</h3><span class="badge">Integrated checkout</span><p>Hosted card checkout with test and live connections, verified payment capture and automatic renewal.</p></article>
+<article class="tile"><h3>PayPal</h3><span class="badge">Integrated checkout</span><p>PayPal approval and server-side capture, sandbox and live modes, with verified settlement before renewal.</p></article>
+<article class="tile"><h3>Rampex</h3><span class="badge">Integrated checkout · live only</span><p>Hosted payment links, signed notifications and merchant-API settlement verification. A customer email and configured merchant wallet are required.</p></article>
 </div><p class="note">Features depend on your reseller settings. Customers renew their current package; package and connection changes stay with you.</p></section>
 <footer class="footer"><strong>Less back-and-forth. More control.</strong><br><?php if (in_array($licenseState,['unlicensed','pending'],true)): ?><a href="#activate">Activate your license to get started ↑</a><?php else: ?>Contact your administrator about your license.<?php endif; ?></footer>
 </main></body></html>

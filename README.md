@@ -54,11 +54,11 @@ Current checkout requires an approved branded package and an expired service. A 
 
 ## Status
 
-Version **0.6.1: Announcement inbox**. A top-right bell shows unread notices and opens an inbox of active announcements. Info, warning and critical notices have distinct icons and styled popups. Administrators can publish, edit, withdraw or permanently delete notices. Checks run roughly every minute while open and every 15 minutes in the background, subject to Android restrictions. [Website deployment and announcement controls](docs/global-announcements.md). [Update publishing instructions](docs/android-updates.md).
+Version **0.7.0: More payment gateways**. PayPal, Stripe and Rampex join Square in reseller-owned renewal checkout, with customer payment-method selection and server-verified settlement. Stripe and PayPal support sandbox/live connections; Rampex is live-only. [Gateway setup and deployment](docs/payment-gateways.md). [Announcements](docs/global-announcements.md) and [verified app updates](docs/android-updates.md) remain available.
 
-[Download My TV 0.6.1](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.6.1/My-TV-0.6.1.apk). Updates 0.5.0 and 0.6.0 in place using `com.extreme.mytv`. Users of the older `net.extremeiptv.account` package still need a fresh installation and sign-in once. Announcement deletion requires the Website host update linked above; no Auth-worker update is required.
+[Download My TV 0.7.0](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.7.0/My-TV-0.7.0.apk). Updates existing `com.extreme.mytv` installations in place. Additional gateways require the Website host update and each reseller's merchant/webhook configuration. No Auth-worker update is required. Merchant-account payment acceptance remains a deployment check.
 
-Login, bouquet/package reads, renewal offers, confirmation, Square browser checkout, status recovery and new order history are connected in code. Production mode requires server-verified captured payment before fulfilment; sandbox never renews. Service changes are reseller-only. Updates are checked automatically, downloaded after customer selection, verified and handed to Android for approved installation. Live device and production-payment acceptance remain deployment checks.
+Login, bouquet/package reads, renewal offers, confirmation, Square/Stripe/PayPal/Rampex browser checkout, status recovery and new order history are connected in code. Production mode requires server-verified settlement before fulfilment; sandbox never renews. Service changes are reseller-only. Updates are checked automatically, downloaded after customer selection, verified and handed to Android for approved installation. Live device and production-payment acceptance remain deployment checks.
 
 ### Screens
 
@@ -66,7 +66,7 @@ Login, bouquet/package reads, renewal offers, confirmation, Square browser check
 - Home dashboard with verified service status, expiry, and connection counts
 - Real worker package and assigned bouquets; no categories
 - Explicit unavailable states for package/duration fields the provider doesn't supply
-- Current-package renewal confirmation, secure Square checkout and payment/renewal status
+- Current-package renewal confirmation, payment-method selection, hosted checkout and payment/renewal status
 - New order history with sandbox labels and recoverable original orders
 - Account refresh, stale-data notice, and independent sign-out
 - Automatic verification of an encrypted saved login on restart, retry without retyping after an outage, and removal on explicit sign-out

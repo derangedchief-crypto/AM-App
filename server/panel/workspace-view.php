@@ -7,7 +7,7 @@ $currentConnections=array_filter($squareConnections,static fn($connection)=>$con
 $setupItems=[
     ['Your customer app',$ready && $settings['app_enabled'],'Choose your brand and enable customer access.','settings'],
     ['Renewal pricing',!$pricingError && $stateCounts['enabled']>0,'Set the retail prices your customers will pay.','pricing'],
-    ['Payment connection',$square && count($currentConnections)>0,'Connect Square in your selected checkout environment.','square'],
+    ['Square connection',$square && count($currentConnections)>0,'Connect Square, or configure PayPal, Stripe or Rampex under Payment gateways.','square'],
 ];
 ?>
 <section id="overview" data-am-section>
@@ -15,7 +15,7 @@ $setupItems=[
 <div class="am-metrics">
 <a class="am-metric" href="#settings"><span>Customer app</span><strong><?= !$ready?'Unavailable':($settings['app_enabled']?'Enabled':'Off') ?></strong><small>Access preferences →</small></a>
 <a class="am-metric" href="#pricing"><span>Prices enabled</span><strong><?= $pricingError?'—':$stateCounts['enabled'] ?></strong><small><?= e($priceCurrency) ?> · package renewal prices →</small></a>
-<a class="am-metric" href="#square"><span>Checkout mode</span><strong><?= $settings['square_mode']==='live'?'Production':'Sandbox' ?></strong><small><?= $settings['square_mode']==='live'?'Real payments':'Test payments only' ?> →</small></a>
+<a class="am-metric" href="#square"><span>Square checkout mode</span><strong><?= $settings['square_mode']==='live'?'Production':'Sandbox' ?></strong><small>Other gateways use their connection's environment →</small></a>
 </div>
 <div class="am-grid am-overview-grid">
 <section class="card"><div class="am-card-heading"><div><span class="am-eyebrow">Get ready</span><h2>Your app setup</h2></div><span class="am-pill"><?= count(array_filter($setupItems,static fn($item)=>$item[1])) ?>/3</span></div>

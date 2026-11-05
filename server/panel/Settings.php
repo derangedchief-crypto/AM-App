@@ -45,7 +45,7 @@ final class Settings
         $gateways = $input['gateways'] ?? [];
         if (!is_array($gateways) || count($gateways) > 3) throw new \InvalidArgumentException('Invalid gateway selection.');
         foreach ($gateways as $gateway) {
-            if (!is_string($gateway) || !in_array($gateway, ['stripe', 'square', 'rampex'], true)) {
+            if (!is_string($gateway) || !in_array($gateway, ['stripe', 'square', 'rampex', 'paypal'], true)) {
                 throw new \InvalidArgumentException('Invalid gateway selection.');
             }
         }

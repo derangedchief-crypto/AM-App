@@ -14,6 +14,7 @@ PANEL_FILES = ('Settings.php', 'Square.php', 'Promotions.php', 'Pricing.php', 'L
 
 
 PANEL_FILES += ('Announcements.php', 'announcements.php', 'announcements-admin.php')
+PANEL_FILES += ('Gateways.php', 'GatewayStore.php', 'gateway-webhook.php', 'gateways-view.php')
 
 
 def write_config(path, state, public_url):

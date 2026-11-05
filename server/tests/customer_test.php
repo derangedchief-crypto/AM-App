@@ -71,7 +71,7 @@ try {
     $ctx=$service->session($login['token']); check(count($login['account']['offers'])===1,'Offer available');
     check($login['account']['service']['active_connections']===1 && $login['account']['service']['max_connections']===2,'Live usage passes through separately from limit');
     check($service->account($ctx)['renewal_unavailable_message']===null,'Available offer has no false blocker');
-    foreach ([['allow_renewals',false,'general customer renewal permission'],['billing_mode','none','Integrated billing'],['gateways',[],'Square is not selected']] as [$field,$value,$expected]) {
+    foreach ([['allow_renewals',false,'general customer renewal permission'],['billing_mode','none','Integrated billing'],['gateways',[],'No payment gateway is selected']] as [$field,$value,$expected]) {
         $blocked=$ctx; $blocked['settings'][$field]=$value;
         $view=$service->account($blocked);
         check($view['offers']===[] && str_contains($view['renewal_unavailable_message'],$expected),'Specific configuration blocker: '.$field);

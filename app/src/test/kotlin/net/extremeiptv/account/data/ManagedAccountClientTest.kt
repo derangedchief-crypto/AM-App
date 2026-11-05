@@ -8,6 +8,39 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ManagedAccountClientTest {
+    @Test fun `gateway options quote selection and email stay customer scoped`() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); val client = ManagedAccountClient(server.url("/customer-api.php"))
+            val data = JSONObject(account())
+            data.getJSONArray("offers").getJSONObject(0).put("payment_options", org.json.JSONArray("""[{"gateway":"paypal","mode":"sandbox"},{"gateway":"rampex","mode":"live"}]"""))
+            server.reply(JSONObject().put("ok",true).put("token","b".repeat(64)).put("account",data).toString())
+            val offer = client.readAccount(ServiceCredentials("customer","secret")).offers.single(); server.takeRequest()
+            assertEquals(listOf(PaymentOption("paypal","sandbox"), PaymentOption("rampex","live")), offer.paymentOptions)
+            server.reply("""{"ok":true,"quote":{"quote_id":"${"c".repeat(32)}","package_name":"Monthly","amount_minor":725,"currency":"CAD","mode":"live","gateway":"rampex","duration":30,"duration_period":"days","max_connections":2}}""")
+            val quote = client.quote(offer.copy(gateway = "rampex", email = "customer@example.com"))
+            val fields = JSONObject(server.takeRequest().body.readUtf8())
+            assertEquals("rampex",fields.getString("gateway")); assertEquals("customer@example.com",fields.getString("email"))
+            assertFalse(fields.has("amount_minor")); assertFalse(fields.has("connection_id")); assertFalse(fields.has("reseller_id"))
+            assertEquals("",quote.offer.email)
+        }
+    }
+    @Test fun `checkout URLs must match gateway and environment`() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); val client = ManagedAccountClient(server.url("/customer-api.php"))
+            server.reply("""{"ok":true,"token":"${"b".repeat(64)}","account":${account()}}""")
+            client.readAccount(ServiceCredentials("customer","secret"))
+            for ((gateway,url) in listOf("stripe" to "https://checkout.stripe.com/c/pay/fixture", "paypal" to "https://www.paypal.com/checkoutnow?token=fixture", "rampex" to "https://checkout.rampex.io/pay.php?ref=fixture")) {
+                val body = JSONObject(order(url)); body.getJSONObject("order").put("gateway",gateway)
+                server.reply(body.toString()); assertEquals(gateway,client.order("a".repeat(32)).gateway)
+                body.getJSONObject("order").put("checkout_url","https://square.link/other")
+                server.reply(body.toString())
+                try { client.order("a".repeat(32)); fail("Cross-provider URL accepted") } catch (e: AccountFailure) { assertEquals(FailureKind.INVALID_RESPONSE,e.kind) }
+            }
+            val body = JSONObject(order("https://www.sandbox.paypal.com/checkoutnow")); body.getJSONObject("order").put("gateway","paypal")
+            server.reply(body.toString())
+            try { client.order("a".repeat(32)); fail("Sandbox URL accepted in live checkout") } catch (e: AccountFailure) { assertEquals(FailureKind.INVALID_RESPONSE,e.kind) }
+        }
+    }
     @Test fun `active usage remains distinct from connection limit and unknown is not zero`() = runBlocking {
         for (count in listOf(null, JSONObject.NULL, 0, 1, 3, -1)) {
             MockWebServer().use { server ->

@@ -16,7 +16,7 @@ try {
     $input = json_decode($raw,true,16,JSON_THROW_ON_ERROR);
     if (!is_array($input) || !is_string($input['action'] ?? null)) throw new \AmAccount\CustomerError(422,'Invalid request.');
     $action = $input['action']; unset($input['action']);
-    $allowed = match ($action) {'login'=>['username','password','activation_code'],'account','orders','logout'=>[], 'bouquets'=>['bouquet_ids','revision'], 'quote'=>['package_id','currency','promo_id'], 'checkout'=>['quote_id'],'order'=>['order_id'], default=>throw new \AmAccount\CustomerError(404,'Unknown operation.')};
+    $allowed = match ($action) {'login'=>['username','password','activation_code'],'account','orders','logout'=>[], 'bouquets'=>['bouquet_ids','revision'], 'quote'=>['package_id','currency','promo_id','gateway','email'], 'checkout'=>['quote_id'],'order'=>['order_id'], default=>throw new \AmAccount\CustomerError(404,'Unknown operation.')};
     if (array_diff(array_keys($input),$allowed)) throw new \AmAccount\CustomerError(422,'Unexpected request fields.');
     // Load server-only worker configuration, without starting a reseller session.
     require_once dirname(__DIR__) . '/includes/functions.php';
@@ -31,10 +31,11 @@ try {
     } else {
         $ctx = $service->session($token);
         if ($action === 'quote' && (!is_int($input['package_id'] ?? null) || !is_string($input['currency'] ?? null))) throw new \AmAccount\CustomerError(422,'Invalid renewal option.');
+        foreach (['gateway','email'] as $field) if (isset($input[$field]) && !is_string($input[$field])) throw new \AmAccount\CustomerError(422,'Invalid payment field.');
         foreach (['quote_id','order_id','promo_id'] as $id) if (array_key_exists($id,$input) && (!is_string($input[$id]) || !preg_match('/^[a-f0-9]{32}$/D',$input[$id]))) throw new \AmAccount\CustomerError(422,'Invalid reference.');
         $result = match($action) {
             'account'=>['account'=>$service->account($ctx)], 'orders'=>['orders'=>$service->orders($ctx)],
-            'quote'=>['quote'=>$service->quote($ctx,$input['package_id'],$input['currency'],$input['promo_id'] ?? null)],
+            'quote'=>['quote'=>$service->quote($ctx,$input['package_id'],$input['currency'],$input['promo_id'] ?? null,$input['gateway'] ?? 'square',$input['email'] ?? '')],
             'checkout'=>['order'=>$service->checkout($ctx,$input['quote_id'] ?? '')],
             'order'=>['order'=>$service->status($ctx,$input['order_id'] ?? '')],
             'bouquets'=>$service->bouquets($ctx,$input),
