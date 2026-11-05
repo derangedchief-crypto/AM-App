@@ -8,11 +8,11 @@ android {
     namespace = "net.extremeiptv.account"
     compileSdk = 36
     defaultConfig {
-        applicationId = "net.extremeiptv.account"
+        applicationId = "com.extreme.mytv"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
-        versionName = "0.4.3-my-tv"
+        versionCode = 16
+        versionName = "0.5.0"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
@@ -26,6 +26,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.10.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

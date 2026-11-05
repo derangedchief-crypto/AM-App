@@ -48,6 +48,8 @@ import net.extremeiptv.account.data.ManagedAccountClient
 import net.extremeiptv.account.data.RenewalOrder
 import net.extremeiptv.account.data.RenewalOffer
 import net.extremeiptv.account.data.EncryptedLoginStore
+import net.extremeiptv.account.update.AppUpdateViewModel
+import net.extremeiptv.account.update.UpdatePrompt
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -58,6 +60,9 @@ internal fun LiveAccountApp() = AccountTheme {
     val context = LocalContext.current.applicationContext
     val model: AccountViewModel = viewModel { AccountViewModel(ManagedAccountClient(), EncryptedLoginStore(context)) }
     val state by model.state.collectAsStateWithLifecycle()
+    val updates: AppUpdateViewModel = viewModel()
+    UpdatePrompt(updates)
+    val checkUpdates = { updates.check(manual = true) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, model) {
         val observer = LifecycleEventObserver { _, event ->
@@ -68,17 +73,17 @@ internal fun LiveAccountApp() = AccountTheme {
     }
     val account = state.account
     if (account == null) {
-        if (state.restoring || state.canRetrySavedLogin) SavedLoginScreen(state, model::restoreSavedLogin, model::signOut)
-        else LiveSignIn(state, model::signIn)
+        if (state.restoring || state.canRetrySavedLogin) SavedLoginScreen(state, model::restoreSavedLogin, model::signOut, checkUpdates)
+        else LiveSignIn(state, model::signIn, checkUpdates)
     } else {
         // Account changes/logouts dispose navigation and any visible private account details.
         key(account.username) { LiveDashboard(account, state, model::refresh, model::signOut,
-            model::requestQuote, model::confirmRenewal, model::dismissQuote, model::checkOrder, model::saveBouquets) }
+            model::requestQuote, model::confirmRenewal, model::dismissQuote, model::checkOrder, model::saveBouquets, checkUpdates) }
     }
 }
 
 @Composable
-private fun LiveSignIn(state: LiveAccountState, onSignIn: (String, String, String, Boolean) -> Unit) {
+private fun LiveSignIn(state: LiveAccountState, onSignIn: (String, String, String, Boolean) -> Unit, checkUpdates: () -> Unit) {
     var method by rememberSaveable { mutableStateOf("Activation code") }
     // These inputs intentionally do not use rememberSaveable or SavedStateHandle.
     var code by remember { mutableStateOf("") }
@@ -162,6 +167,7 @@ private fun LiveSignIn(state: LiveAccountState, onSignIn: (String, String, Strin
         TextButton(onClick = { help = !help }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
             Text(if (help) "Hide sign-in help" else "Need help signing in?", color = Muted)
         }
+        TextButton(onClick = checkUpdates, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("App updates", color = Muted) }
         if (help) BoxCard {
             Text("Your reseller can help", fontWeight = FontWeight.SemiBold)
             Hint("Use your Hub activation code or the service username and password supplied by your reseller. Ask them to enable My TV access if you cannot sign in.")
@@ -172,7 +178,7 @@ private fun LiveSignIn(state: LiveAccountState, onSignIn: (String, String, Strin
 }
 
 @Composable
-private fun SavedLoginScreen(state: LiveAccountState, retry: () -> Unit, signOut: () -> Unit) {
+private fun SavedLoginScreen(state: LiveAccountState, retry: () -> Unit, signOut: () -> Unit, checkUpdates: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Ink).safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Brand()
@@ -184,13 +190,14 @@ private fun SavedLoginScreen(state: LiveAccountState, retry: () -> Unit, signOut
             Primary("Retry saved login", retry)
         }
         Secondary("Use another account", signOut)
+        TextButton(onClick = checkUpdates) { Text("App updates") }
     }
 }
 
 @Composable
 private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refresh: () -> Unit, signOut: () -> Unit,
     quote: (RenewalOffer) -> Unit, confirm: () -> Unit, dismissQuote: () -> Unit, checkOrder: (String) -> Unit,
-    saveBouquets: (Set<Int>, String) -> Unit) {
+    saveBouquets: (Set<Int>, String) -> Unit, checkUpdates: () -> Unit) {
     val context = LocalContext.current
     var linkError by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf("Home") }
@@ -365,7 +372,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                         linkError = runCatching { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.fromParts("mailto", account.supportEmail, null))) }.isFailure
                     }
                     ActivityRow("App updates", "Version ${BuildConfig.VERSION_NAME}", "", "Check") {
-                        linkError = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/derangedchief-crypto/AM-App/releases"))) }.isFailure
+                        checkUpdates()
                     }
                     if (linkError) Hint("No compatible app could open this link. Use your browser or email app to contact your reseller.")
                     Secondary("Sign out") { showLogout = true }

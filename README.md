@@ -54,11 +54,11 @@ Current checkout requires an approved branded package and an expired service. A 
 
 ## Status
 
-Version **0.4.3: My TV branding**. The app is now called **My TV**, with the approved lime TV-and-play logo on the launcher and throughout the app. Adaptive and themed launcher icons use the same symbol. The existing application ID and signing identity are retained for in-place updates. [Logo source files](docs/branding/) are included.
+Version **0.5.0: My TV updates**. The installed package is now **`com.extreme.mytv`**, with automatic GitHub update checks, background update alerts and verified in-app APK downloads. Android asks the customer to approve installation. [Update behavior and publishing instructions](docs/android-updates.md). [Logo source files](docs/branding/) are included.
 
-[Download the My TV 0.4.3 APK](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.4.3-my-tv/My-TV-0.4.3-test.apk). This branding update requires only the APK. Existing saved logins and reseller-specific service names are preserved.
+[Download My TV 0.5.0](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.5.0/My-TV-0.5.0.apk). This package transition requires a **fresh installation and sign-in once**; it does not replace the older `net.extremeiptv.account` app. Later updates install over this new package. No website or worker update is needed.
 
-Login, bouquet/package reads, renewal offers, confirmation, Square browser checkout, status recovery and new order history are connected in code. Production mode requires server-verified captured payment before fulfilment; sandbox never renews. Service changes are reseller-only. Downloads/updates open GitHub Releases; silent/automatic APK installation is not implemented. Live device and production-payment acceptance remain deployment checks.
+Login, bouquet/package reads, renewal offers, confirmation, Square browser checkout, status recovery and new order history are connected in code. Production mode requires server-verified captured payment before fulfilment; sandbox never renews. Service changes are reseller-only. Updates are checked automatically, downloaded after customer selection, verified and handed to Android for approved installation. Live device and production-payment acceptance remain deployment checks.
 
 ### Screens
 
@@ -82,7 +82,7 @@ Requires JDK 17 and Android SDK 36. Set `ANDROID_HOME` or create an ignored `loc
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Open **My TV** after deployment and reseller opt-in, using an approved customer's Hub activation code or service username/password. The app uses application ID `net.extremeiptv.account`; the original `.demo` APK can coexist. After successful verification, the original login is encrypted with AES-256-GCM and an app-specific Android Keystore key in app-private, no-backup storage. A code login saves the code, not the password returned by code resolution. AM bearer tokens stay in memory. Raw secrets are not logged or saved in UI state/backups.
+Open **My TV** after deployment and reseller opt-in, using an approved customer's Hub activation code or service username/password. The app uses application ID `com.extreme.mytv`; older packages can coexist. After successful verification, the original login is encrypted with AES-256-GCM and an app-specific Android Keystore key in app-private, no-backup storage. A code login saves the code, not the password returned by code resolution. AM bearer tokens stay in memory. Raw secrets are not logged or saved in UI state/backups.
 
 On restart the app verifies the saved login before showing account data. A temporary outage preserves it and offers retry. Sign-out deletes the encrypted file and its key; revoked credentials are also removed. The account snapshot itself remains memory-only. A background/foreground transition refreshes the account. After updating from 0.2.0, sign in once to create the saved login.
 
