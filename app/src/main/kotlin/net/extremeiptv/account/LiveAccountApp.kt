@@ -62,6 +62,7 @@ internal fun LiveAccountApp() = AccountTheme {
     val state by model.state.collectAsStateWithLifecycle()
     val updates: AppUpdateViewModel = viewModel()
     UpdatePrompt(updates)
+    net.extremeiptv.account.announcements.AnnouncementPrompt()
     val checkUpdates = { updates.check(manual = true) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, model) {

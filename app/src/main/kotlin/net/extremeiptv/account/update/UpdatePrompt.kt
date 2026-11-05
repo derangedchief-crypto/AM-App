@@ -65,7 +65,7 @@ internal fun UpdatePrompt(model: AppUpdateViewModel) {
                     TextButton(onClick = {
                         if (Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
                         else runCatching { context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)) }
-                    }) { Text("Enable update notifications") }
+                    }) { Text("Enable app notifications") }
                 }
                 if (state.apk != null && !state.downloading) TextButton(onClick = model::download) { Text("Download again") }
             }

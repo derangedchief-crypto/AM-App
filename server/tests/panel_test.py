@@ -1,5 +1,6 @@
 """Synthetic portal-contract integration tests; never calls a real worker."""
 import http.cookiejar
+import json
 import os
 from pathlib import Path
 import re
@@ -91,6 +92,8 @@ def run():
         db = root / 'settings.sqlite'
         subprocess.run([PHP, '-r', 'require $argv[1]; \\AmAccount\\SettingsStore::initialize($argv[2]);',
                         str(root / 'am-app/Settings.php'), str(db)], check=True)
+        subprocess.run([PHP, '-r', 'require $argv[1]; \\AmAccount\\Announcements::migrate($argv[2]);',
+                        str(root / 'am-app/Announcements.php'), str(db)], check=True)
         subprocess.run([PHP, '-r', 'require $argv[1]; \\AmAccount\\SquareStore::migrate($argv[2]);',
                         str(root / 'am-app/Square.php'), str(db)], check=True)
         subprocess.run([PHP, '-r', 'require $argv[1]; \\AmAccount\\PricingStore::migrate($argv[2]);',
@@ -132,6 +135,38 @@ def run():
                         break
                 except OSError:
                     time.sleep(.03)
+            admin='/am-app/announcements-admin.php'
+            feed='/am-app/announcements.php'
+            assert json.loads(request(feed)[1])['announcements']==[]
+            assert request(feed, {})[0]==405
+            for query in ['', 'user=1', 'admin=1&staff=1', 'admin=1&impersonation=1']:
+                login(query)
+                assert request(admin)[0]==403
+                assert request(admin, {'action':'save'})[0]==403
+            login('admin=1')
+            page=request(admin)
+            assert page[0]==200
+            csrf=re.search('name="csrf" value="([^"]*)"',page[1]).group(1)
+            notice={'csrf':csrf,'action':'save','id':'','revision':'0','title':'<script>alert(1)</script>',
+                    'body':'Synthetic outage notice','severity':'warning','expires':time.strftime('%Y-%m-%dT%H:%M',time.gmtime(time.time()+3600))}
+            assert request(admin, {**notice,'csrf':'wrong'})[0]==419
+            assert request(admin, {**notice,'severity':'invalid'})[0]==422
+            assert request(admin, notice)[0]==303
+            rows=json.loads(request(feed)[1])['announcements']
+            assert len(rows)==1 and rows[0]['revision']==1
+            assert '<script>alert(1)</script>' not in request(admin)[1]
+            notice.update(id=rows[0]['id'],revision='1',body='Updated outage')
+            assert request(admin, notice)[0]==303
+            assert request(admin, notice)[0]==422
+            assert json.loads(request(feed)[1])['announcements'][0]['revision']==2
+            assert request(admin, {**notice,'revision':'2','action':'withdraw'})[0]==303
+            assert json.loads(request(feed)[1])['announcements']==[]
+            assert request(admin, {**notice,'revision':'3'})[0]==422
+            assert request(admin, {**notice,'id':'','revision':'0'})[0]==303
+            with sqlite3.connect(db) as connection:
+                connection.execute('UPDATE am_announcements SET expires=1')
+            assert json.loads(request(feed)[1])['announcements']==[]
+            login('')
             initial = request()
             assert initial[0] == 302, initial
             for query in ['user=1&active=0', 'user=1&staff=1', 'user=1&impersonation=1', 'user=invalid']:

@@ -35,7 +35,8 @@ RESELLER_LINK = PREVIOUS_APPLICATIONS_LINK.replace(
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
     '<svg viewBox="0 0 128 128" fill="none" aria-hidden="true"><rect x="24" y="28" width="80" height="60" rx="16" stroke="currentColor" stroke-width="8"/><path d="M55 44L77 58L55 72V44Z" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M64 90V102M49 102H79" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></svg>')
 OLD_ADMIN_LINK = "['am-licenses', 'AM App licenses', 'am-app/licenses-admin.php', 'check']"
-ADMIN_LINK = "['am-licenses', 'My TV licenses', 'am-app/licenses-admin.php', 'check']"
+PREVIOUS_ADMIN_LINK = "['am-licenses', 'My TV licenses', 'am-app/licenses-admin.php', 'check']"
+ADMIN_LINK = PREVIOUS_ADMIN_LINK + ",\n            ['am-announcements', 'My TV announcements', 'am-app/announcements-admin.php', 'check']"
 
 
 def changes(site):
@@ -74,9 +75,10 @@ def changes(site):
                     raise RuntimeError('AM admin menu marker changed; review the file.')
                 if ADMIN_LINK in old:
                     continue
-                if old.count(OLD_ADMIN_LINK) != 1:
+                previous = PREVIOUS_ADMIN_LINK if PREVIOUS_ADMIN_LINK in old else OLD_ADMIN_LINK
+                if old.count(previous) != 1:
                     raise RuntimeError('AM admin menu content changed; review the file.')
-                result.append((path, old, old.replace(OLD_ADMIN_LINK, ADMIN_LINK, 1)))
+                result.append((path, old, old.replace(previous, ADMIN_LINK, 1)))
                 continue
             anchor = "            ['credit-audit', 'Credit log audit', 'credit-audit.php', 'check'],"
             if old.count(anchor) != 1 or 'function admin_menu(): array' not in old:

@@ -13,6 +13,9 @@ import tempfile
 PANEL_FILES = ('Settings.php', 'Square.php', 'Promotions.php', 'Pricing.php', 'Licenses.php', 'my-tv-symbol.svg', 'showcase-home.png', 'showcase-renewal.png', 'license-showcase.php', 'license-gate.php', 'management-style.php', 'workspace-view.php', 'licenses-admin.php', 'promo-banner.php', 'promotions-view.php', 'Customer.php', 'customer-api.php', 'payment-return.php', 'square-webhook.php', 'index.php')
 
 
+PANEL_FILES += ('Announcements.php', 'announcements.php', 'announcements-admin.php')
+
+
 def write_config(path, state, public_url):
     from urllib.parse import urlsplit
     parsed = urlsplit(public_url)
@@ -107,6 +110,8 @@ def install():
         (state / 'gateway.key').write_bytes(os.urandom(32))
         subprocess.run(php + ['-r', 'require $argv[1]; \\AmAccount\\CustomerService::migrate($argv[2]);',
                               str(stage / 'Customer.php'), str(state / 'settings.sqlite')], check=True)
+        subprocess.run(php + ['-r', 'require $argv[1]; \\AmAccount\\Announcements::migrate($argv[2]);',
+                              str(stage / 'Announcements.php'), str(state / 'settings.sqlite')], check=True)
         write_config(stage / 'settings-config.php', state, args.public_url)
         (stage / '.user.ini').write_text('open_basedir="' + ':'.join(paths) + '"\ndisplay_errors=Off\n')
         for path in [state, *state.iterdir(), stage, *stage.iterdir()]:

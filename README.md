@@ -54,9 +54,9 @@ Current checkout requires an approved branded package and an expired service. A 
 
 ## Status
 
-Version **0.5.0: My TV updates**. The installed package is now **`com.extreme.mytv`**, with automatic GitHub update checks, background update alerts and verified in-app APK downloads. Android asks the customer to approve installation. [Update behavior and publishing instructions](docs/android-updates.md). [Logo source files](docs/branding/) are included.
+Version **0.6.0: Global announcements**. Administrators can publish, edit and withdraw self-hosted service notices for all customers. The app checks roughly every minute while open and every 15 minutes in the background, subject to Android restrictions. [Website deployment and announcement controls](docs/global-announcements.md). GitHub update checks and verified downloads remain available: [publishing instructions](docs/android-updates.md).
 
-[Download My TV 0.5.0](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.5.0/My-TV-0.5.0.apk). This package transition requires a **fresh installation and sign-in once**; it does not replace the older `net.extremeiptv.account` app. Later updates install over this new package. No website or worker update is needed.
+[Download My TV 0.6.0](https://github.com/derangedchief-crypto/AM-App/releases/download/v0.6.0/My-TV-0.6.0.apk). Updates 0.5.0 in place using `com.extreme.mytv`. Users of the older `net.extremeiptv.account` package still need a fresh installation and sign-in once. Announcements require the Website host update linked above; no Auth-worker update is required.
 
 Login, bouquet/package reads, renewal offers, confirmation, Square browser checkout, status recovery and new order history are connected in code. Production mode requires server-verified captured payment before fulfilment; sandbox never renews. Service changes are reseller-only. Updates are checked automatically, downloaded after customer selection, verified and handed to Android for approved installation. Live device and production-payment acceptance remain deployment checks.
 
