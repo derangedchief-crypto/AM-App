@@ -2,6 +2,8 @@
 
 ## My TV workspace
 
+The reseller website uses the approved My TV TV-and-play logo, matching the Android app. Run `python3 server/update-panel.py` followed by `python3 server/install-menus.py` on the Website host to apply the logo to the workspace, activation, licensing and checkout-return pages, browser tabs and reseller navigation. The administrator menu is labeled **My TV licenses**. No APK or worker update is needed for website branding.
+
 Update the Website host with `python3 server/update-panel.py` for the redesigned management site. The default **Overview** shows customer access, enabled prices in the selected currency, checkout mode and setup links. Desktop navigation is grouped by workspace, customers and account; mobile uses an expandable section menu. Packages, promotions, customer access, orders and payment setup share the My TV design. Detailed setup instructions remain available in expandable help.
 
 The reseller's **License** section shows active status, issue/activation dates, expiry (or no scheduled expiry), account, masked key suffix and license reference. These values come from the authenticated reseller's existing license; the full key is never retrieved or shown. Expiry extensions and replacements remain administrator-managed. The administrator license page and checkout-return page use the same visual style. The website update preserves settings, licenses, payments and keys; no worker or APK update is required for this redesign.

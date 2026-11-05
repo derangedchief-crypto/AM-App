@@ -211,7 +211,7 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><meta name="color-scheme" content="dark"><title>My TV · Management</title>
+<meta name="robots" content="noindex,nofollow"><meta name="color-scheme" content="dark"><title>My TV · Management</title><link rel="icon" type="image/svg+xml" href="my-tv-symbol.svg">
 <style>
 .am-page{max-width:1200px;margin:0 auto;padding:32px 20px 64px;color:var(--text)}
 .am-top{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:26px;padding:24px;background:var(--card);border:1px solid var(--border);border-radius:12px}
@@ -247,7 +247,7 @@ if (isset($action) && is_string($action)) $initialSection = match ($action) {
 <?php require __DIR__.'/management-style.php'; ?>
 </head><body class="am-management">
 <main class="am-page">
-<header class="am-top"><a class="am-brand" href="<?= e(url('am-app/')) ?>"><span class="am-logo">AM</span><span><strong>My TV</strong><small>Reseller workspace</small></span></a><div class="am-account"><span><?= e((string)($reseller['display_name'] ?? $reseller['username'] ?? 'Your account')) ?></span><a href="<?= e(url('dashboard.php')) ?>">Reseller panel ↗</a></div></header>
+<header class="am-top"><a class="am-brand" href="<?= e(url('am-app/')) ?>"><img class="am-logo" src="my-tv-symbol.svg" width="44" height="44" alt=""><span><strong>My <span class="am-wordmark-tv">TV</span></strong><small>Reseller workspace</small></span></a><div class="am-account"><span><?= e((string)($reseller['display_name'] ?? $reseller['username'] ?? 'Your account')) ?></span><a href="<?= e(url('dashboard.php')) ?>">Reseller panel ↗</a></div></header>
 <div class="am-workspace"><aside class="am-sidebar"><button class="am-menu-toggle" type="button" aria-expanded="false" aria-controls="am-section-navigation"><span>Sections</span><span aria-hidden="true">⌄</span></button><nav id="am-section-navigation" class="am-nav" aria-label="My TV management sections">
 <?php foreach (['Workspace'=>['overview'=>'Overview','settings'=>'App settings','pricing'=>'Packages & prices','promotions'=>'Promotions'],'Customers'=>['customer-access'=>'Customer access','customer-orders'=>'Orders','renewal-check'=>'Renewal check'],'Account'=>['square'=>'Square setup','license'=>'License']] as $group=>$items): ?><div class="am-nav-group"><span class="am-nav-label"><?= e($group) ?></span><?php foreach ($items as $id=>$label): ?><a href="#<?= e($id) ?>" data-am-link="<?= e($id) ?>"><?= e($label) ?><span aria-hidden="true">↗</span></a><?php endforeach; ?></div><?php endforeach; ?>
 </nav><a class="am-sidebar-license" href="#license"><span class="am-dot"></span> Licensed account <span aria-hidden="true">→</span></a></aside><div class="am-content">

@@ -20,6 +20,14 @@ with tempfile.TemporaryDirectory(dir='/tmp/opencode') as directory:
     assert header.read_text().replace(menus.RESELLER_LINK,'')==original
     assert menus.changes(root)==[]
     updated=header.read_text()
+    updated_admin=admin.read_text()
+    assert 'My TV licenses' in updated_admin
+    header.write_text(updated.replace(menus.RESELLER_LINK,menus.PREVIOUS_APPLICATIONS_LINK))
+    admin.write_text(updated_admin.replace(menus.ADMIN_LINK,menus.OLD_ADMIN_LINK))
+    pending=menus.changes(root); assert len(pending)==2
+    for path,old,new in pending: path.write_text(new)
+    assert header.read_text()==updated and admin.read_text()==updated_admin
+    assert menus.changes(root)==[]
     assert updated.index('Sub-resellers</a>') < updated.index('>Applications</div>') < updated.index('My TV') < updated.index('>Credits</a>')
     header.write_text(original.replace('<nav class="nav-group">','<nav class="nav-group">'+menus.LEGACY_RESELLER_LINK))
     pending=menus.changes(root); assert len(pending)==1

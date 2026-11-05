@@ -18,7 +18,7 @@ LEGACY_RESELLER_LINK = '''
       <?php endif; ?>
 '''
 ADMIN_MARKER = '// AM_APP_LICENSE_ADMIN_MENU'
-RESELLER_LINK = '''
+PREVIOUS_APPLICATIONS_LINK = '''
       <!-- AM_APP_LICENSED_MENU -->
       <?php if (empty($_SESSION['portal_staff']) && empty($_SESSION['impersonation'])): ?>
       <div role="group" aria-labelledby="am-applications-heading" style="margin:10px 0;padding:10px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
@@ -30,6 +30,12 @@ RESELLER_LINK = '''
       </div>
       <?php endif; ?>
 '''
+
+RESELLER_LINK = PREVIOUS_APPLICATIONS_LINK.replace(
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+    '<svg viewBox="0 0 128 128" fill="none" aria-hidden="true"><rect x="24" y="28" width="80" height="60" rx="16" stroke="currentColor" stroke-width="8"/><path d="M55 44L77 58L55 72V44Z" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M64 90V102M49 102H79" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></svg>')
+OLD_ADMIN_LINK = "['am-licenses', 'AM App licenses', 'am-app/licenses-admin.php', 'check']"
+ADMIN_LINK = "['am-licenses', 'My TV licenses', 'am-app/licenses-admin.php', 'check']"
 
 
 def changes(site):
@@ -46,6 +52,8 @@ def changes(site):
                     raise RuntimeError('AM reseller menu marker changed; review the file.')
                 if RESELLER_LINK in old:
                     base = old.replace(RESELLER_LINK, '', 1)
+                elif PREVIOUS_APPLICATIONS_LINK in old:
+                    base = old.replace(PREVIOUS_APPLICATIONS_LINK, '', 1)
                 elif LEGACY_RESELLER_LINK in old:
                     base = old.replace(LEGACY_RESELLER_LINK, '', 1)
                 else:
@@ -64,11 +72,16 @@ def changes(site):
             if ADMIN_MARKER in old:
                 if old.count(ADMIN_MARKER) != 1 or 'am-app/licenses-admin.php' not in old:
                     raise RuntimeError('AM admin menu marker changed; review the file.')
+                if ADMIN_LINK in old:
+                    continue
+                if old.count(OLD_ADMIN_LINK) != 1:
+                    raise RuntimeError('AM admin menu content changed; review the file.')
+                result.append((path, old, old.replace(OLD_ADMIN_LINK, ADMIN_LINK, 1)))
                 continue
             anchor = "            ['credit-audit', 'Credit log audit', 'credit-audit.php', 'check'],"
             if old.count(anchor) != 1 or 'function admin_menu(): array' not in old:
                 raise RuntimeError('Unrecognized admin menu layout; no files changed.')
-            new = old.replace(anchor, "            // AM_APP_LICENSE_ADMIN_MENU\n            ['am-licenses', 'AM App licenses', 'am-app/licenses-admin.php', 'check'],\n" + anchor, 1)
+            new = old.replace(anchor, "            // AM_APP_LICENSE_ADMIN_MENU\n            " + ADMIN_LINK + ",\n" + anchor, 1)
         result.append((path, old, new))
     return result
 
@@ -116,7 +129,7 @@ def install():
     finally:
         for _, _, _, tmp in staged:
             tmp.unlink(missing_ok=True)
-    print('Installed Applications / My TV and AM App licenses menu links. Private backup: ' + str(backup))
+    print('Installed Applications / My TV and My TV licenses menu links. Private backup: ' + str(backup))
 
 
 if __name__ == '__main__':

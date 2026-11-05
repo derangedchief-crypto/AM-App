@@ -39,7 +39,8 @@ def update():
     php = installer.clean_php(args.php)
     source = Path(__file__).resolve().parent / 'panel'
     for name in installer.PANEL_FILES:
-        subprocess.run(php + ['-l', str(source / name)], check=True)
+        if name.endswith('.php'):
+            subprocess.run(php + ['-l', str(source / name)], check=True)
     backup = Path(tempfile.mkdtemp(prefix=time.strftime('backup-%Y%m%d-%H%M%S-'), dir=state))
     backup.chmod(0o700)
     for name in (*installer.PANEL_FILES, 'settings-config.php', '.user.ini'):

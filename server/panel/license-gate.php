@@ -20,7 +20,7 @@ if (http_response_code()!==503) http_response_code(403);
 $licenseState=http_response_code()===503?'unavailable':\AmAccount\Licenses::state($licenseRow);
 ?>
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>My TV · Activation</title>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>My TV · Activation</title><link rel="icon" type="image/svg+xml" href="my-tv-symbol.svg">
 <style>
 :root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0b1017;color:#f3f6fa}
 *{box-sizing:border-box}body{margin:0;min-height:100svh;background:radial-gradient(ellipse at 50% 0%,#1b2b30 0%,transparent 65%)}
@@ -39,7 +39,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #d5f5
 </style></head><body><main><div class="am-shell">
 <a class="am-back" href="<?= e(url('dashboard.php')) ?>"><span aria-hidden="true">←</span> Back to reseller panel</a>
 <section class="am-license" aria-labelledby="activation-title">
-<div class="am-brand"><div class="am-logo" aria-hidden="true">AM</div><div><h1 id="activation-title">My TV</h1><p class="am-caption">Reseller access</p></div></div>
+<div class="am-brand"><img class="am-logo" src="my-tv-symbol.svg" width="52" height="52" alt="" style="background:transparent;border-radius:0"><div><h1 id="activation-title">My <span style="color:#d5f58a">TV</span></h1><p class="am-caption">Reseller access</p></div></div>
 <div class="am-status"><span>License status</span><span class="am-badge"><?= e($licenseState==='pending'?'Not activated':$licenseState) ?></span></div>
 <?php if ($licenseError): ?><p class="am-error" role="alert"><?= e($licenseError) ?></p><?php endif; ?>
 <?php if (in_array($licenseState,['unlicensed','pending'],true)): ?>
