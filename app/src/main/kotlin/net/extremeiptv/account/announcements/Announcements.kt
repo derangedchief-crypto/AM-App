@@ -9,12 +9,8 @@ import android.content.Intent
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
@@ -95,7 +91,7 @@ internal object AnnouncementService {
                     if (remaining > 0 && notifications.getNotificationChannel("service-announcements").importance != NotificationManager.IMPORTANCE_NONE) {
                         val pending = PendingIntent.getActivity(context, 702, Intent(context, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                         val notification = NotificationCompat.Builder(context, "service-announcements").setSmallIcon(R.drawable.ic_my_tv_logo)
-                            .setContentTitle("My TV · ${notice.title}").setContentText(notice.body)
+                            .setContentTitle("${alertAppearance(notice.severity).label} · ${notice.title}").setContentText(notice.body)
                             .setStyle(NotificationCompat.BigTextStyle().bigText(notice.body)).setContentIntent(pending)
                             .setTimeoutAfter(remaining).setAutoCancel(true).build()
                         try {
@@ -117,10 +113,10 @@ class AnnouncementWorker(context: Context, parameters: WorkerParameters) : Corou
 }
 
 @Composable
-internal fun AnnouncementPrompt() {
+internal fun AnnouncementPrompt(state: AnnouncementInboxState) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
-    var notices by remember { mutableStateOf(AnnouncementService.unread(context)) }
+    val notices = state.unread
     var enabled by remember { mutableStateOf(context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { enabled = it }
     val preferences = remember { context.getSharedPreferences("global-announcements", Context.MODE_PRIVATE) }
@@ -132,16 +128,21 @@ internal fun AnnouncementPrompt() {
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build())
         lifecycle.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
-                notices = AnnouncementService.unread(context)
-                try { AnnouncementService.refresh(context, false) }
+                state.reload()
+                try { AnnouncementService.refresh(context, false); state.offline = false }
                 catch (cancel: CancellationException) { throw cancel }
-                catch (_: Exception) { /* Keep unexpired cached notices when offline. */ }
-                notices = AnnouncementService.unread(context)
+                catch (_: Exception) { state.offline = true }
+                state.reload()
                 delay(60_000)
             }
         }
     }
-    if (offerNotifications && notices.isEmpty()) {
+    LaunchedEffect(state.rows) {
+        val expiry = state.rows.minOfOrNull { it.expires } ?: return@LaunchedEffect
+        delay((expiry * 1000 - System.currentTimeMillis()).coerceAtLeast(0))
+        state.reload()
+    }
+    if (offerNotifications && notices.isEmpty() && !state.open) {
         AlertDialog(onDismissRequest = closeOffer, title = { Text("Service notifications") },
             text = { Text("Allow My TV to notify you about service issues and announcements. Background checks run roughly every 15 minutes; Android may delay them.") },
             confirmButton = { TextButton(onClick = {
@@ -151,20 +152,11 @@ internal fun AnnouncementPrompt() {
             }) { Text("Enable notifications") } },
             dismissButton = { TextButton(onClick = closeOffer) { Text("Later") } })
     }
-    val notice = notices.firstOrNull() ?: return
-    LaunchedEffect(notice.id, notice.revision) {
-        delay((notice.expires * 1000 - System.currentTimeMillis()).coerceAtLeast(0))
-        notices = AnnouncementService.unread(context)
+    if (state.open) {
+        val selected = state.rows.firstOrNull { it.id == state.selectedId }
+        if (selected == null) AnnouncementInbox(state)
+        else AnnouncementDetail(selected, true) { state.read(selected); state.selectedId = null }
+    } else notices.firstOrNull()?.let { notice ->
+        AnnouncementDetail(notice, false) { state.read(notice) }
     }
-    val dismiss = { AnnouncementService.dismiss(context, notice); notices = AnnouncementService.unread(context) }
-    AlertDialog(onDismissRequest = dismiss, title = { Text(notice.title) }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState())) {
-            Text("Service announcement · ${notice.severity}")
-            Text(notice.body)
-            if (!enabled) TextButton(onClick = {
-                if (Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                else runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)) }
-            }) { Text("Enable service notifications") }
-        }
-    }, confirmButton = { TextButton(onClick = dismiss) { Text("Dismiss") } })
 }

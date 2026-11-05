@@ -313,12 +313,14 @@ private fun SignIn(onSignIn: () -> Unit) {
     }
 }
 
-@Composable internal fun Brand() {
+@Composable internal fun Brand(trailing: @Composable () -> Unit = {}) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Image(painterResource(R.drawable.ic_my_tv_logo), contentDescription = null, modifier = Modifier.size(48.dp))
         Spacer(Modifier.width(8.dp))
         Text("My ", color = White, fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
         Text("TV", color = Lime, fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
+        Spacer(Modifier.weight(1f))
+        trailing()
     }
 }
 @Composable private fun DemoLabel() { Text("SCREEN PREVIEW  /  DEMO DATA", color = Amber, fontSize = 10.sp, letterSpacing = 1.5.sp) }

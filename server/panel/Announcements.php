@@ -22,6 +22,11 @@ final class Announcements
     { return $this->query('SELECT id,revision,title,body,severity,expires,updated FROM am_announcements WHERE withdrawn=0 AND expires>? ORDER BY updated DESC,id LIMIT 20',[time()])->fetchAll(\PDO::FETCH_ASSOC); }
     public function recent(): array
     { return $this->query('SELECT * FROM am_announcements ORDER BY updated DESC,id LIMIT 100')->fetchAll(\PDO::FETCH_ASSOC); }
+    public function delete(string $id,int $revision): void
+    {
+        if (!preg_match('/^[a-f0-9]{32}$/D',$id) || $revision<1) throw new \InvalidArgumentException('Invalid announcement.');
+        if ($this->query('DELETE FROM am_announcements WHERE id=? AND revision=?',[$id,$revision])->rowCount()!==1) throw new \InvalidArgumentException('Notice changed or was deleted. Reload before trying again.');
+    }
     public function save(string $id,int $revision,string $title,string $body,string $severity,int $expires,bool $withdraw=false): void
     {
         if ($id!=='' && !preg_match('/^[a-f0-9]{32}$/D',$id)) throw new \InvalidArgumentException('Invalid announcement.');

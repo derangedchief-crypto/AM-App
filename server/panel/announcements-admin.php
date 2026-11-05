@@ -13,7 +13,7 @@ try {
     $config=require __DIR__.'/settings-config.php'; $store=new \AmAccount\Announcements($config['database']);
     if ($_SERVER['REQUEST_METHOD']==='POST') {
         csrf_check(); $action=$field('action');
-        if (!in_array($action,['save','withdraw'],true)) throw new InvalidArgumentException('Invalid action.');
+        if (!in_array($action,['save','withdraw','delete'],true)) throw new InvalidArgumentException('Invalid action.');
         $expires=0;
         if ($action==='save') {
             $value=$field('expires'); $date=DateTimeImmutable::createFromFormat('!Y-m-d\TH:i',$value,new DateTimeZone('UTC'));
@@ -22,7 +22,8 @@ try {
         }
         $revision=$field('revision');
         if (!preg_match('/^[0-9]{1,9}$/D',$revision)) throw new InvalidArgumentException('Invalid revision.');
-        $store->save($field('id'),(int)$revision,$action==='save'?$field('title'):'',$action==='save'?$field('body'):'',$action==='save'?$field('severity'):'',$expires,$action==='withdraw');
+        if ($action==='delete') $store->delete($field('id'),(int)$revision);
+        else $store->save($field('id'),(int)$revision,$action==='save'?$field('title'):'',$action==='save'?$field('body'):'',$action==='save'?$field('severity'):'',$expires,$action==='withdraw');
         header('Location: '.url('am-app/announcements-admin.php'),true,303); exit;
     }
     $rows=$store->recent();
@@ -39,5 +40,7 @@ $form=static function(array $row=[]): void { ?>
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My TV · Global announcements</title><link rel="icon" href="my-tv-symbol.svg"><?php require __DIR__.'/management-style.php'; ?><style>main{max-width:900px;margin:auto;padding:24px 16px}section,details{background:var(--card);padding:20px;border-radius:14px;margin:16px 0}label{display:block;margin:14px 0}input:not([type=hidden]),textarea,select{display:block;width:100%;box-sizing:border-box;padding:12px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px}summary{cursor:pointer}p{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body class="am-admin-page"><main><a href="<?= e(url('admin.php')) ?>">Admin panel</a> · <a href="licenses-admin.php">My TV licenses</a><h1>Global announcements</h1><p>Public notices for every My TV customer, including before sign-in. Checks run about every minute while open and every 15 minutes in the background; Android may delay delivery. Updates alert customers again. Withdrawals disappear on their next successful check. Do not include private account information.</p>
 <?php if ($error): ?><section role="alert"><?= e($error) ?></section><?php endif; ?>
 <section><h2>New announcement</h2><?php $form(); ?></section><h2>Recent announcements</h2>
-<?php foreach ($rows as $row): $active=!(int)$row['withdrawn'] && (int)$row['expires']>time(); ?><details><summary><?= e($row['title']) ?> · <?= $active?'Active':((int)$row['withdrawn']?'Withdrawn':'Expired') ?> · revision <?= (int)$row['revision'] ?></summary><?php if ($active): $form($row); ?><form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="withdraw"><input type="hidden" name="id" value="<?= e($row['id']) ?>"><input type="hidden" name="revision" value="<?= (int)$row['revision'] ?>"><button class="btn">Withdraw announcement</button></form><?php else: ?><p><?= e($row['body']) ?></p><?php endif; ?></details><?php endforeach; ?>
+<?php foreach ($rows as $row): $active=!(int)$row['withdrawn'] && (int)$row['expires']>time(); ?><details><summary><?= e($row['title']) ?> · <?= $active?'Active':((int)$row['withdrawn']?'Withdrawn':'Expired') ?> · revision <?= (int)$row['revision'] ?></summary><?php if ($active): $form($row); ?><form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="withdraw"><input type="hidden" name="id" value="<?= e($row['id']) ?>"><input type="hidden" name="revision" value="<?= (int)$row['revision'] ?>"><button class="btn">Withdraw announcement</button></form><?php else: ?><p><?= e($row['body']) ?></p><?php endif; ?>
+<form method="post" style="margin-top:16px"><?= csrf_field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= e($row['id']) ?>"><input type="hidden" name="revision" value="<?= (int)$row['revision'] ?>"><p>Delete permanently removes this notice from the admin list and customer feed. Devices remove their copy on the next successful check.</p><button class="btn" style="color:#ffb4ab;border-color:#ffb4ab66">Delete announcement</button></form>
+</details><?php endforeach; ?>
 </main></body></html>

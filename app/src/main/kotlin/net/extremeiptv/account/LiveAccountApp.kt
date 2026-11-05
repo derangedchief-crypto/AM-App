@@ -62,7 +62,8 @@ internal fun LiveAccountApp() = AccountTheme {
     val state by model.state.collectAsStateWithLifecycle()
     val updates: AppUpdateViewModel = viewModel()
     UpdatePrompt(updates)
-    net.extremeiptv.account.announcements.AnnouncementPrompt()
+    val announcements = remember { net.extremeiptv.account.announcements.AnnouncementInboxState(context) }
+    net.extremeiptv.account.announcements.AnnouncementPrompt(announcements)
     val checkUpdates = { updates.check(manual = true) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, model) {
@@ -74,17 +75,20 @@ internal fun LiveAccountApp() = AccountTheme {
     }
     val account = state.account
     if (account == null) {
-        if (state.restoring || state.canRetrySavedLogin) SavedLoginScreen(state, model::restoreSavedLogin, model::signOut, checkUpdates)
-        else LiveSignIn(state, model::signIn, checkUpdates)
+        if (state.restoring || state.canRetrySavedLogin) SavedLoginScreen(state, model::restoreSavedLogin, model::signOut, checkUpdates,
+            { net.extremeiptv.account.announcements.AnnouncementBell(announcements) })
+        else LiveSignIn(state, model::signIn, checkUpdates,
+            { net.extremeiptv.account.announcements.AnnouncementBell(announcements) })
     } else {
         // Account changes/logouts dispose navigation and any visible private account details.
         key(account.username) { LiveDashboard(account, state, model::refresh, model::signOut,
-            model::requestQuote, model::confirmRenewal, model::dismissQuote, model::checkOrder, model::saveBouquets, checkUpdates) }
+            model::requestQuote, model::confirmRenewal, model::dismissQuote, model::checkOrder, model::saveBouquets, checkUpdates,
+            { net.extremeiptv.account.announcements.AnnouncementBell(announcements) }) }
     }
 }
 
 @Composable
-private fun LiveSignIn(state: LiveAccountState, onSignIn: (String, String, String, Boolean) -> Unit, checkUpdates: () -> Unit) {
+private fun LiveSignIn(state: LiveAccountState, onSignIn: (String, String, String, Boolean) -> Unit, checkUpdates: () -> Unit, notificationBell: @Composable () -> Unit) {
     var method by rememberSaveable { mutableStateOf("Activation code") }
     // These inputs intentionally do not use rememberSaveable or SavedStateHandle.
     var code by remember { mutableStateOf("") }
@@ -106,7 +110,7 @@ private fun LiveSignIn(state: LiveAccountState, onSignIn: (String, String, Strin
         .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(Modifier.widthIn(max = 440.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        Brand()
+        Brand(notificationBell)
         Spacer(Modifier.height(4.dp))
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Welcome to My TV.", color = White, fontSize = 32.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
@@ -179,10 +183,10 @@ private fun LiveSignIn(state: LiveAccountState, onSignIn: (String, String, Strin
 }
 
 @Composable
-private fun SavedLoginScreen(state: LiveAccountState, retry: () -> Unit, signOut: () -> Unit, checkUpdates: () -> Unit) {
+private fun SavedLoginScreen(state: LiveAccountState, retry: () -> Unit, signOut: () -> Unit, checkUpdates: () -> Unit, notificationBell: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize().background(Ink).safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        Brand()
+        Brand(notificationBell)
         Heading("Welcome back.", "Your login is saved. Checking your service with the provider.")
         if (state.busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         state.error?.let { ErrorNotice(it) }
@@ -198,7 +202,7 @@ private fun SavedLoginScreen(state: LiveAccountState, retry: () -> Unit, signOut
 @Composable
 private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refresh: () -> Unit, signOut: () -> Unit,
     quote: (RenewalOffer) -> Unit, confirm: () -> Unit, dismissQuote: () -> Unit, checkOrder: (String) -> Unit,
-    saveBouquets: (Set<Int>, String) -> Unit, checkUpdates: () -> Unit) {
+    saveBouquets: (Set<Int>, String) -> Unit, checkUpdates: () -> Unit, notificationBell: @Composable () -> Unit) {
     val context = LocalContext.current
     var linkError by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf("Home") }
@@ -240,7 +244,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
         Column(Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(scroll)
             .padding(horizontal = 24.dp).padding(top = 16.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Brand()
+            Brand(notificationBell)
             if (state.busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             state.error?.let { ErrorNotice(if (state.stale) "$it\nShowing your last verified account details." else it) }
             if (state.quote != null) {

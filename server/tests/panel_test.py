@@ -162,10 +162,28 @@ def run():
             assert request(admin, {**notice,'revision':'2','action':'withdraw'})[0]==303
             assert json.loads(request(feed)[1])['announcements']==[]
             assert request(admin, {**notice,'revision':'3'})[0]==422
+            assert request(admin, {**notice,'action':'delete','revision':'2'})[0]==422
+            assert request(admin, {**notice,'action':'delete','revision':'3','csrf':'wrong'})[0]==419
+            for query in ['user=1','admin=1&staff=1','admin=1&impersonation=1']:
+                login(query)
+                assert request(admin, {**notice,'action':'delete','revision':'3'})[0]==403
+            login('admin=1')
+            csrf=re.search('name="csrf" value="([^"]*)"',request(admin)[1]).group(1)
+            notice['csrf']=csrf
+            assert request(admin, {**notice,'action':'delete','revision':'3'})[0]==303
+            assert notice['id'] not in request(admin)[1]
+            assert request(admin, {**notice,'action':'delete','revision':'3'})[0]==422
+            assert request(admin, {**notice,'id':'','revision':'0'})[0]==303
+            active=json.loads(request(feed)[1])['announcements'][0]
+            assert request(admin, {**notice,'id':active['id'],'revision':'1','action':'delete'})[0]==303
+            assert json.loads(request(feed)[1])['announcements']==[]
             assert request(admin, {**notice,'id':'','revision':'0'})[0]==303
             with sqlite3.connect(db) as connection:
                 connection.execute('UPDATE am_announcements SET expires=1')
             assert json.loads(request(feed)[1])['announcements']==[]
+            with sqlite3.connect(db) as connection:
+                expired=connection.execute('SELECT id,revision FROM am_announcements LIMIT 1').fetchone()
+            assert request(admin, {**notice,'id':expired[0],'revision':str(expired[1]),'action':'delete'})[0]==303
             login('')
             initial = request()
             assert initial[0] == 302, initial
