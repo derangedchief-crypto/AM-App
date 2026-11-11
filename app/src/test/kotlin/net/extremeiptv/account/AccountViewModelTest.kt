@@ -153,6 +153,56 @@ class AccountViewModelTest {
         advanceUntilIdle(); assertEquals(LiveAccountState(),model.state.value)
     }
 
+    @Test fun `recovering the same outstanding order signals invoice navigation every time`() = runTest(dispatcher) {
+        val saved = RenewalOrder("b".repeat(32),"Monthly",725,"CAD","live","pending",false,1800000000,"https://square.link/u/test")
+        val client = object : AccountClient {
+            override suspend fun resolveCode(code: String) = ServiceCredentials("customer","secret")
+            override suspend fun readAccount(credentials: ServiceCredentials) = account()
+            override suspend fun orders() = listOf(saved)
+            override suspend fun order(id: String) = saved
+            override suspend fun quote(offer: RenewalOffer): RenewalQuote = error("Must recover the existing order")
+        }
+        val model = AccountViewModel(client,TestLoginStore())
+        model.signIn("","customer","secret",false); advanceUntilIdle()
+        assertEquals(0, model.state.value.invoiceRevision)
+        // Payment-method selection can finish long after the Renew tap, while the model is idle.
+        repeat(2) { attempt ->
+            model.requestQuote(RenewalOffer(1,"Monthly",725,"CAD",30,"days",2)); advanceUntilIdle()
+            assertEquals(attempt + 1, model.state.value.invoiceRevision)
+            assertEquals(saved, model.state.value.selectedOrder)
+            assertFalse(model.state.value.busy)
+            assertNull(model.state.value.quote)
+        }
+    }
+
+    @Test fun `pending checkout is usable without another account or order refresh`() = runTest(dispatcher) {
+        val offer = RenewalOffer(1,"Monthly",725,"CAD",30,"days",2)
+        val saved = RenewalOrder("b".repeat(32),"Monthly",725,"CAD","live","pending",false,1800000000,"https://square.link/u/test")
+        var checkoutStarted = false
+        val client = object : AccountClient {
+            override suspend fun resolveCode(code: String) = ServiceCredentials("customer","secret")
+            override suspend fun readAccount(credentials: ServiceCredentials): ServiceAccount {
+                check(!checkoutStarted) { "Account refresh must not block checkout" }
+                return account()
+            }
+            override suspend fun orders(): List<RenewalOrder> {
+                check(!checkoutStarted) { "Order list refresh must not block checkout" }
+                return emptyList()
+            }
+            override suspend fun quote(offer: RenewalOffer) = RenewalQuote("a".repeat(32),offer,"live")
+            override suspend fun checkout(quote: RenewalQuote): RenewalOrder { checkoutStarted = true; return saved }
+        }
+        val model = AccountViewModel(client,TestLoginStore())
+        model.signIn("","customer","secret",false); advanceUntilIdle()
+        model.requestQuote(offer); advanceUntilIdle()
+        model.confirmRenewal(); advanceUntilIdle()
+        assertFalse(model.state.value.busy)
+        assertNull(model.state.value.error)
+        assertEquals(saved, model.state.value.selectedOrder)
+        assertEquals(listOf(saved), model.state.value.orders)
+        assertEquals(1, model.state.value.invoiceRevision)
+    }
+
     @Test fun `uncertain checkout retry keeps the same confirmed quote`() = runTest(dispatcher) {
         val offer = RenewalOffer(1,"Monthly",725,"CAD",30,"days",2)
         val ids = mutableListOf<String>()

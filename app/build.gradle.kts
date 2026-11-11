@@ -11,8 +11,8 @@ android {
         applicationId = "com.extreme.mytv"
         minSdk = 26
         targetSdk = 36
-        versionCode = 19
-        versionName = "0.7.0"
+        versionCode = 20
+        versionName = "0.7.1"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {

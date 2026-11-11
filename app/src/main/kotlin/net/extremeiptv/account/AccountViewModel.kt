@@ -23,6 +23,7 @@ internal data class LiveAccountState(
     val quote: RenewalQuote? = null,
     val selectedOrder: RenewalOrder? = null,
     val bouquetMessage: String? = null,
+    val invoiceRevision: Int = 0,
 )
 
 /** Saved login is encrypted; account access still requires fresh provider verification. */
@@ -131,7 +132,7 @@ internal class AccountViewModel(private val client: AccountClient, private val s
         if (outstanding != null) {
             val order = client.order(outstanding.id)
             currentCoroutineContext().ensureActive()
-            mutableState.value = mutableState.value.copy(selectedOrder = order, quote = null)
+            showOrder(order)
         } else {
             val quote = client.quote(offer)
             currentCoroutineContext().ensureActive()
@@ -146,16 +147,16 @@ internal class AccountViewModel(private val client: AccountClient, private val s
         renewalOperation {
             val order = client.checkout(quote)
             currentCoroutineContext().ensureActive()
-            mutableState.value = mutableState.value.copy(selectedOrder = order, quote = null)
-            reloadAfterOrder()
+            showOrder(order)
+            if (order.verified || order.complete) reloadAfterOrder()
         }
     }
 
     fun checkOrder(id: String) = renewalOperation {
         val order = client.order(id)
         currentCoroutineContext().ensureActive()
-        mutableState.value = mutableState.value.copy(selectedOrder = order, quote = null)
-        reloadAfterOrder()
+        showOrder(order)
+        if (order.verified || order.complete) reloadAfterOrder()
     }
 
     fun saveBouquets(ids: Set<Int>, revision: String) = renewalOperation {
@@ -164,6 +165,12 @@ internal class AccountViewModel(private val client: AccountClient, private val s
         mutableState.value = mutableState.value.copy(account = result.account, stale = false,
             bouquetMessage = if (result.refreshPending) "Bouquets saved. Service refresh is pending; tap Save bouquets again to retry."
                 else "Bouquets saved and service refreshed. No charge.")
+    }
+
+    private fun showOrder(order: RenewalOrder) {
+        mutableState.value = mutableState.value.copy(selectedOrder = order, quote = null,
+            orders = listOf(order) + mutableState.value.orders.filterNot { it.id == order.id },
+            invoiceRevision = mutableState.value.invoiceRevision + 1)
     }
 
     private suspend fun reloadAfterOrder() {

@@ -216,19 +216,20 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
     var tab by rememberSaveable { mutableStateOf("Home") }
     var invoiceId by rememberSaveable { mutableStateOf<String?>(null) }
     var billFilter by rememberSaveable { mutableStateOf("All") }
-    var awaitingReview by remember { mutableStateOf(false) }
     var showLogout by remember { mutableStateOf(false) }
-    LaunchedEffect(state.busy, state.selectedOrder, awaitingReview) {
-        // A renewal request may recover an existing checkout instead of returning a new quote.
-        if (awaitingReview && !state.busy) {
-            awaitingReview = false
-            if (state.selectedOrder != null && state.quote == null && state.error == null) {
-                invoiceId = state.selectedOrder.id
-                tab = "Invoice"
-            }
+    var shownInvoiceRevision by rememberSaveable { mutableStateOf(0) }
+    LaunchedEffect(state.invoiceRevision) {
+        // Navigate on the actual result, including recovery after payment-method selection.
+        if (state.invoiceRevision > shownInvoiceRevision && state.selectedOrder != null) {
+            shownInvoiceRevision = state.invoiceRevision
+            invoiceId = state.selectedOrder.id
+            tab = "Invoice"
         }
     }
     val scroll = key(tab, state.quote != null) { rememberScrollState() }
+    LaunchedEffect(state.error) {
+        if (state.error != null) scroll.scrollTo(0)
+    }
     BackHandler(enabled = tab != "Home" || state.quote != null) {
         if (state.quote != null) dismissQuote()
         else tab = when (tab) { "Modify", "Renew" -> "Services"; "Invoice" -> "Bills"; else -> "Home" }
@@ -322,7 +323,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                 "Renew" -> {
                     Heading("More time.\nSame great service.", "Add time without losing your remaining days.")
                     LiveServiceCard(account)
-                    RenewalOptions(account, state.busy || state.stale) { awaitingReview = true; quote(it) }
+                    RenewalOptions(account, state.busy || state.stale, quote)
                     Secondary("Back to service") { tab = "Services" }
                 }
                 "Deals" -> {
@@ -346,7 +347,7 @@ private fun LiveDashboard(account: ServiceAccount, state: LiveAccountState, refr
                             Detail("Deal price", deal.offer.price, accent = true)
                             Hint("Ends ${dateTimeText(deal.endsAt * 1000)} · ${ZoneId.systemDefault().id}. Future renewals use normal pricing.")
                             Hint("Choose an available payment method. Test modes never renew service.")
-                            Button(onClick = { awaitingReview = true; quote(deal.offer) }, enabled = !state.busy && !state.stale,
+                            Button(onClick = { quote(deal.offer) }, enabled = !state.busy && !state.stale,
                                 shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp)) {
                                 Text("Review deal · ${deal.offer.price}")
                             }
