@@ -59,11 +59,17 @@ import java.time.format.FormatStyle
 internal fun LiveAccountApp() = AccountTheme {
     val context = LocalContext.current.applicationContext
     val model: AccountViewModel = viewModel { AccountViewModel(ManagedAccountClient(), EncryptedLoginStore(context)) }
-    val state by model.state.collectAsStateWithLifecycle()
     val updates: AppUpdateViewModel = viewModel()
     UpdatePrompt(updates)
     val announcements = remember { net.extremeiptv.account.announcements.AnnouncementInboxState(context) }
     net.extremeiptv.account.announcements.AnnouncementPrompt(announcements)
+    LiveAccountSession(model, { updates.check(manual = true) },
+        { net.extremeiptv.account.announcements.AnnouncementBell(announcements) })
+}
+
+@Composable
+internal fun LiveAccountSession(model: AccountViewModel, checkUpdates: () -> Unit, notificationBell: @Composable () -> Unit) {
+    val state = model.state.collectAsStateWithLifecycle().value
     var paymentOffer by remember { mutableStateOf<RenewalOffer?>(null) }
     val requestRenewal: (RenewalOffer) -> Unit = { offer ->
         if (offer.amount == 0L || offer.paymentOptions.isEmpty()) model.requestQuote(offer.copy(gateway = offer.paymentOptions.firstOrNull()?.gateway ?: "square"))
@@ -72,7 +78,6 @@ internal fun LiveAccountApp() = AccountTheme {
     paymentOffer?.let { offer ->
         PaymentChoice(offer, { paymentOffer = null }) { selected -> paymentOffer = null; model.requestQuote(selected) }
     }
-    val checkUpdates = { updates.check(manual = true) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, model) {
         val observer = LifecycleEventObserver { _, event ->
@@ -84,14 +89,14 @@ internal fun LiveAccountApp() = AccountTheme {
     val account = state.account
     if (account == null) {
         if (state.restoring || state.canRetrySavedLogin) SavedLoginScreen(state, model::restoreSavedLogin, model::signOut, checkUpdates,
-            { net.extremeiptv.account.announcements.AnnouncementBell(announcements) })
+            notificationBell)
         else LiveSignIn(state, model::signIn, checkUpdates,
-            { net.extremeiptv.account.announcements.AnnouncementBell(announcements) })
+            notificationBell)
     } else {
         // Account changes/logouts dispose navigation and any visible private account details.
         key(account.username) { LiveDashboard(account, state, model::refresh, model::signOut,
             requestRenewal, model::confirmRenewal, model::dismissQuote, model::checkOrder, model::saveBouquets, checkUpdates,
-            { net.extremeiptv.account.announcements.AnnouncementBell(announcements) }) }
+            notificationBell) }
     }
 }
 
